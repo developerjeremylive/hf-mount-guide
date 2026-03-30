@@ -310,20 +310,22 @@ document.addEventListener('DOMContentLoaded', () => {
             let apiUrl, headers;
             
             if (PROXY_URL) {
-                // Using proxy (Cloudflare Worker)
+                // Using proxy - send model ID and full prompt directly
                 apiUrl = `${PROXY_URL}/${PG_STATE.selectedModel}`;
+                // Don't include Bearer prefix - worker handles it
                 headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${PG_STATE.apiKey}`
+                    'Content-Type': 'application/json'
                 };
-            } else {
-                // Direct call (will have CORS issues) - updated to use router
-                apiUrl = `https://router.huggingface.co/${PG_STATE.selectedModel}`;
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${PG_STATE.apiKey}`
+                // Include API key in body instead
+                const requestBody = {
+                    inputs: text,
+                    parameters: {
+                        temperature: PG_STATE.config.temperature,
+                        max_new_tokens: PG_STATE.config.maxTokens,
+                        return_full_text: false,
+                        do_sample: true
+                    }
                 };
-            }
             
             const systemPrompt = "Eres un asistente útil. Responde en español.";
             const conversation = chat.messages
@@ -331,21 +333,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 .map(m => m.role === 'user' ? `Usuario: ${m.content}` : `Asistente: ${m.content}`)
                 .join('\n');
             
-            const fullPrompt = `${systemPrompt}\n\n${conversation}\nAsistente:`;
+            const fullPrompt = `${systemPrompt}\n\n${conversation}\nAsistente: `;
+            
+            // Create request body
+            const requestBody = {
+                inputs: fullPrompt,
+                parameters: {
+                    temperature: PG_STATE.config.temperature,
+                    max_new_tokens: PG_STATE.config.maxTokens,
+                    return_full_text: false,
+                    do_sample: true
+                }
+            };
             
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: headers,
-                body: JSON.stringify({
-                    inputs: fullPrompt,
-                    parameters: {
-                        temperature: PG_STATE.config.temperature,
-                        max_new_tokens: PG_STATE.config.maxTokens,
-                        return_full_text: false,
-                        do_sample: true,
-                        top_p: 0.95
-                    }
-                })
+                body: JSON.stringify(requestBody)
             });
             
             if (!response.ok) {
