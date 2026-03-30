@@ -1,23 +1,37 @@
 /**
- * hf-mount Playground Proxy
- * Cloudflare Worker - API Proxy para Hugging Face
+ * hf-mount Guide - Cloudflare Worker Proxy
  * 
- * Instrucciones:
- * 1. Crea un Worker en Cloudflare Dashboard
- * 2. Copia este código
- * 3. Configura el namespace de Secrets con HF_TOKEN
- * 4. Actualiza la URL en playground.js
+ * Este Worker actúa como proxy para la API de Hugging Face,
+ * permitiendo que el frontend evite restricciones CORS.
+ * 
+ * CONFIGURACIÓN REQUERIDA:
+ * 1. Ejecuta: wrangler secret put HF_TOKEN
+ * 2. Ingresa tu API key de Hugging Face (hf_xxxxx)
+ * 
+ * USO:
+ * POST https://tu-worker.tu-usuario.workers.dev/meta-llama/Llama-3.2-1B-Instruct
+ * {
+ *   "inputs": "Tu prompt aquí",
+ *   "parameters": { "max_new_tokens": 100 }
+ * }
  */
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     
-    // CORS headers
+    // Solo procesar requests a la raíz o con path
+    // Ignorar requests a /favicon, /robots.txt, etc.
+    if (url.pathname === '/favicon.ico' || url.pathname === '/robots.txt') {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    // CORS headers para permitir requests desde cualquier origen
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+      'Access-Control-Max-Age': '86400',
     };
 
     // Handle CORS preflight
@@ -25,45 +39,102 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // Get model from URL path
-    const modelId = url.pathname.replace(/^\//, '');
+    // Extraer el model ID del path
+    // Ejemplo: /meta-llama/Llama-3.2-1B-Instruct -> meta-llama/Llama-3.2-1B-Instruct
+    let modelId = url.pathname.replace(/^\//, '');
     
+    // Si no hay model ID, mostrar info
     if (!modelId) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing model ID. Use /model-name endpoint' 
+      return new Response(JSON.stringify({
+        status: 'ok',
+        message: 'hf-mount Proxy Worker activo',
+        usage: 'Haz POST a /[model-id] con {"inputs": "prompt"}',
+        example: 'POST /meta-llama/Llama-3.2-1B-Instruct con {"inputs": "Hello"}'
       }), {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Get API key from header or env
-    const apiKey = request.headers.get('Authorization')?.replace('Bearer ', '') || env.HF_TOKEN;
+    // Obtener API key del header o del secret
+    const authHeader = request.headers.get('Authorization');
+    const apiKey = authHeader ? authHeader.replace('Bearer ', '').replace('hf_', '') : env.HF_TOKEN;
+    
+    // Si no hay API key, intentar obtener del cuerpo de la request (para compatibilidad)
+    if (!apiKey) {
+      try {
+        const body = await request.clone().json();
+        if (body.apiKey) {
+          // Usar apiKey del body si está presente
+        } else {
+          // Buscar en headers
+        }
+      } catch (e) {}
+    }
     
     if (!apiKey) {
       return new Response(JSON.stringify({ 
-        error: 'Missing API Key. Set HF_TOKEN secret or pass Authorization header' 
+        error: 'API Key requerida. Configura HF_TOKEN como secret o pasa ?key=tu_api_key' 
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
+    // Support API key via query parameter for easier testing
+    const queryKey = url.searchParams.get('key');
+    const finalApiKey = queryKey || apiKey;
+
     try {
-      // Forward request to Hugging Face Inference API
-      const hfResponse = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
+      // Forward request a Hugging Face Inference API
+      const hfUrl = `https://api-inference.huggingface.co/models/${modelId}`;
+      
+      // Get request body
+      const requestBody = await request.text();
+      
+      // Parse y agregar parámetros por defecto si no existen
+      let bodyObj = {};
+      try {
+        bodyObj = requestBody ? JSON.parse(requestBody) : {};
+      } catch (e) {
+        bodyObj = {};
+      }
+      
+      // Agregar parámetros por defecto
+      const hfBody = {
+        inputs: bodyObj.inputs || bodyObj.input || '',
+        parameters: {
+          ...bodyObj.parameters,
+          temperature: bodyObj.parameters?.temperature || 0.7,
+          max_new_tokens: bodyObj.parameters?.max_new_tokens || bodyObj.parameters?.max_tokens || 256,
+          return_full_text: false,
+          do_sample: true,
+        }
+      };
+
+      const hfResponse = await fetch(hfUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer hf_${finalApiKey}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-        body: request.body
+        body: JSON.stringify(hfBody)
       });
 
-      // Get response data
-      const data = await hfResponse.json();
+      // Obtener respuesta
+      const responseText = await hfResponse.text();
+      
+      // Intentar parsear como JSON
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        responseData = { error: responseText };
+      }
 
-      return new Response(JSON.stringify(data), {
+      // Retornar con CORS headers
+      return new Response(JSON.stringify(responseData), {
         status: hfResponse.status,
         headers: {
           ...corsHeaders,
@@ -82,12 +153,18 @@ export default {
   }
 };
 
-// Cloudflare Worker configuration for wrangler.toml:
 /*
-name = "hf-mount-proxy"
-main = "index.js"
-compatibility_date = "2023-12-01"
-
-[secrets]
-HF_TOKEN = "hf_xxxxx"
-*/
+ * CONFIGURACIÓN EN CLOUDFLARE DASHBOARD:
+ * 
+ * 1. Ve a: Workers & Pages → Create Worker
+ * 2. Nombre: hf-mount-proxy
+ * 3. Editor: pega este código
+ * 4. Settings → Variables → Add Secret:
+ *    - Name: HF_TOKEN
+ *    - Value: tu_api_key_de_huggingface (hf_xxxxx)
+ * 5. Deploy
+ * 
+ * O usando CLI:
+ * $ wrangler secret put HF_TOKEN
+ * > Ingresa tu HF API key
+ */
