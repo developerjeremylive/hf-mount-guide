@@ -24,58 +24,210 @@
     <link rel="stylesheet" href="css/style.css">
     
     <style>
-        /* Voice Agent Panel Styles */
+        /* Voice Agent Panel Styles - Anthropic Claude Style */
+        :root {
+            --bg-primary: #0f0f12;
+            --bg-secondary: #1a1a1f;
+            --bg-tertiary: #232329;
+            --bg-input: #0d0d0f;
+            --border-color: #3a3a42;
+            --accent-amber: #f59e0b;
+            --accent-orange: #ea580c;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --user-msg-bg: linear-gradient(135deg, #f59e0b, #ea580c);
+        }
+        
         #voice-agent-overlay {
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(8px);
+            background: rgba(0, 0, 0, 0.7);
         }
         
         #voice-agent-panel {
-            box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+            box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6);
+            background: var(--bg-primary) !important;
+        }
+        
+        /* Settings Modal - Full opaque background */
+        #voice-settings-modal {
+            background: var(--bg-primary) !important;
+            backdrop-filter: none;
+        }
+        
+        /* Input Styles - Dark with light text */
+        .dark-input {
+            background: var(--bg-input) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+        }
+        
+        .dark-input::placeholder {
+            color: var(--text-muted) !important;
+        }
+        
+        .dark-input:focus {
+            border-color: var(--accent-amber) !important;
+            outline: none;
+        }
+        
+        /* Select Styles */
+        .dark-select {
+            background: var(--bg-input) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+        }
+        
+        .dark-select option {
+            background: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+            padding: 8px;
+        }
+        
+        /* Toggle Switch */
+        .toggle-input {
+            appearance: none;
+            width: 44px;
+            height: 24px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s;
+        }
+        
+        .toggle-input::before {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s;
+        }
+        
+        .toggle-input:checked {
+            background: var(--accent-amber);
+            border-color: var(--accent-amber);
+        }
+        
+        .toggle-input:checked::before {
+            transform: translateX(20px);
+            background: #000;
+        }
+        
+        /* Chat Input - Auto-expanding */
+        #chat-input {
+            background: var(--bg-secondary) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
+            min-height: 48px;
+            max-height: 200px;
+            resize: none;
+            overflow-y: auto;
+        }
+        
+        #chat-input::placeholder {
+            color: var(--text-muted) !important;
+        }
+        
+        #chat-input:focus {
+            border-color: var(--accent-amber) !important;
+            outline: none;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes ping-slow {
+            75%, 100% { transform: scale(2); opacity: 0; }
         }
         
         .animate-fade-in {
             animation: fadeIn 0.3s ease-out;
         }
         
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes ping {
-            75%, 100% { transform: scale(2); opacity: 0; }
-        }
-        
         .animate-ping-slow {
-            animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+            animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
         
-        /* Custom scrollbar for chat */
-        #chat-messages::-webkit-scrollbar {
-            width: 4px;
+        /* Message bubbles */
+        .user-message {
+            background: var(--user-msg-bg);
+            color: #000;
+            border-radius: 18px 18px 4px 18px;
         }
         
-        #chat-messages::-webkit-scrollbar-track {
-            background: transparent;
+        .bot-message {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border-radius: 18px 18px 18px 4px;
+            border: 1px solid var(--border-color);
         }
         
-        #chat-messages::-webkit-scrollbar-thumb {
-            background: rgba(251, 191, 36, 0.3);
-            border-radius: 4px;
+        .system-message {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border-radius: 12px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
         
-        #chat-messages::-webkit-scrollbar-thumb:hover {
-            background: rgba(251, 191, 36, 0.5);
+        /* Panel Header */
+        .panel-header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
         }
         
-        /* Code syntax highlighting */
-        .code-block {
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            overflow-x: auto;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.875rem;
+        /* Input Area */
+        .input-area {
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+        }
+        
+        /* Settings Section Labels */
+        .settings-label {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            display: block;
+        }
+        
+        /* Player Controls */
+        #audio-player-controls {
+            background: var(--bg-tertiary);
+            border-color: var(--border-color);
+        }
+        
+        /* Toast */
+        .toast-notification {
+            background: var(--bg-secondary) !important;
+            border: 1px solid var(--border-color) !important;
+            color: var(--text-primary) !important;
         }
     </style>
 </head>
@@ -562,23 +714,23 @@ volumes:
 
     <!-- Voice Agent UI -->
     <!-- Overlay -->
-    <div id="voice-agent-overlay" class="fixed inset-0 bg-dark/60 backdrop-blur-sm z-[55] hidden transition-opacity duration-300"></div>
+    <div id="voice-agent-overlay" class="fixed inset-0 z-[55] hidden transition-opacity duration-300"></div>
     
     <!-- Floating Button -->
-    <button id="voice-agent-btn" class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-amber-500 to-orange-500 text-dark w-14 h-14 rounded-full shadow-lg shadow-amber-500/30 flex items-center justify-center hover:scale-110 transition-transform duration-300 group">
+    <button id="voice-agent-btn" class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-amber-500 to-orange-500 text-black w-14 h-14 rounded-full shadow-lg shadow-amber-500/30 flex items-center justify-center hover:scale-110 transition-transform duration-300 group">
         <i class="fas fa-microphone text-lg"></i>
         <div class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping-slow hidden" id="voice-listening-indicator"></div>
     </button>
     
     <!-- Panel -->
-    <div id="voice-agent-panel" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-dark-900/95 backdrop-blur-xl border-l border-amber-500/20 transform translate-x-full transition-transform duration-300 z-[60] shadow-2xl flex flex-col overflow-hidden">
+    <div id="voice-agent-panel" class="fixed inset-y-0 right-0 w-full sm:w-[420px] bg-[#0f0f12] transform translate-x-full transition-transform duration-300 z-[60] shadow-2xl flex flex-col overflow-hidden border-l border-[#3a3a42]">
         <!-- Header -->
-        <div class="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-dark-800/50">
+        <div class="panel-header px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
                 <i class="fas fa-robot text-amber-400 text-xl"></i>
                 <div>
-                    <h3 class="text-light font-semibold text-sm">AI Assistant</h3>
-                    <p class="text-[10px] text-amber-400 font-mono truncate" id="model-status">Model: gemini-3-flash-preview (Thinking)</p>
+                    <h3 class="text-white font-semibold text-sm">AI Assistant</h3>
+                    <p class="text-amber-400 text-[10px] font-mono truncate" id="model-status">Model: gemini-3-flash-preview (Thinking)</p>
                 </div>
             </div>
             <div class="flex items-center gap-1">
@@ -592,15 +744,15 @@ volumes:
         </div>
         
         <!-- Language & Voice Info -->
-        <div class="px-4 py-2 border-b border-white/10 bg-dark-800/30 flex justify-between items-center">
+        <div class="px-4 py-2 bg-[#1a1a1f] border-b border-[#3a3a42] flex justify-between items-center">
             <span class="text-[10px] text-gray-500 font-mono" id="current-lang">ES</span>
             <span class="text-[10px] text-amber-400 font-mono truncate" id="current-voice-name">Google Español</span>
         </div>
         
-        <!-- Settings Modal -->
-        <div id="voice-settings-modal" class="absolute inset-x-0 top-[73px] bottom-0 bg-dark-900/95 backdrop-blur-xl z-30 p-6 hidden flex-col border-t border-white/10 animate-fade-in overflow-y-auto">
+        <!-- Settings Modal - Full opaque background -->
+        <div id="voice-settings-modal" class="absolute inset-x-0 top-[73px] bottom-0 bg-[#0f0f12] z-30 p-6 hidden flex-col border-t border-[#3a3a42] animate-fade-in overflow-y-auto">
             <div class="flex justify-between items-center mb-6">
-                <h4 class="text-light font-semibold">Configuración</h4>
+                <h4 class="text-white font-semibold">Configuración</h4>
                 <button id="close-settings-btn" class="text-gray-400 hover:text-red-400">
                     <i class="fas fa-times"></i>
                 </button>
@@ -608,18 +760,18 @@ volumes:
             
             <!-- API Key -->
             <div class="mb-4">
-                <label class="text-xs text-gray-500 mb-1 block">Gemini API Key</label>
-                <input type="password" id="api-key-input" class="w-full bg-dark-800 border border-white/10 rounded px-3 py-2 text-sm text-light focus:border-amber-500 outline-none" placeholder="sk-...">
+                <label class="settings-label">Gemini API Key</label>
+                <input type="password" id="api-key-input" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="sk-...">
             </div>
             
             <!-- Model Select -->
             <div class="mb-4">
-                <label class="text-xs text-gray-500 mb-1 block">Modelo</label>
+                <label class="settings-label">Modelo</label>
                 <div class="flex gap-2">
-                    <select id="model-select" class="flex-1 bg-dark-800 border border-white/10 rounded px-3 py-2 text-sm text-light focus:border-amber-500 outline-none">
+                    <select id="model-select" class="dark-select flex-1 rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
                         <option value="custom">Custom Model ID</option>
                     </select>
-                    <button id="refresh-models-btn" class="px-3 py-2 bg-amber-500/20 text-amber-400 rounded hover:bg-amber-500/30 transition-colors">
+                    <button id="refresh-models-btn" class="px-4 py-3 bg-[#232329] text-amber-400 rounded-lg hover:bg-[#2a2a32] transition-colors border border-[#3a3a42]">
                         <i class="fas fa-sync-alt text-sm"></i>
                     </button>
                 </div>
@@ -627,26 +779,26 @@ volumes:
             
             <!-- Custom Model Input -->
             <div class="mb-4 hidden" id="custom-model-container">
-                <label class="text-xs text-gray-500 mb-1 block">Custom Model ID</label>
-                <input type="text" id="custom-model-input" class="w-full bg-dark-800 border border-white/10 rounded px-3 py-2 text-sm text-light focus:border-amber-500 outline-none" placeholder="gemini-3-flash-preview">
+                <label class="settings-label">Custom Model ID</label>
+                <input type="text" id="custom-model-input" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="gemini-3-flash-preview">
             </div>
             
             <!-- Toggles -->
-            <div class="space-y-3 mb-6">
+            <div class="space-y-4 mb-6">
                 <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-400">Thinking Mode</span>
-                    <input type="checkbox" id="thinking-mode-toggle" class="accent-amber-500" checked>
+                    <span class="text-gray-400 text-sm">Thinking Mode</span>
+                    <input type="checkbox" id="thinking-mode-toggle" class="toggle-input" checked>
                 </label>
                 <label class="flex items-center justify-between">
-                    <span class="text-sm text-gray-400">Text-to-Speech (TTS)</span>
-                    <input type="checkbox" id="tts-toggle" class="accent-amber-500" checked>
+                    <span class="text-gray-400 text-sm">Text-to-Speech (TTS)</span>
+                    <input type="checkbox" id="tts-toggle" class="toggle-input" checked>
                 </label>
             </div>
             
             <!-- Language -->
             <div class="mb-4">
-                <label class="text-xs text-gray-500 mb-1 block">Idioma de voz</label>
-                <select id="voice-lang-select" class="w-full bg-dark-800 border border-white/10 rounded px-3 py-2 text-sm text-light focus:border-amber-500 outline-none">
+                <label class="settings-label">Idioma de voz</label>
+                <select id="voice-lang-select" class="dark-select w-full rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
                     <option value="es">Español</option>
                     <option value="en">English</option>
                 </select>
@@ -654,27 +806,27 @@ volumes:
             
             <!-- Voice Select -->
             <div class="mb-6">
-                <label class="text-xs text-gray-500 mb-1 block">Voz</label>
-                <select id="voice-select" class="w-full bg-dark-800 border border-white/10 rounded px-3 py-2 text-sm text-light focus:border-amber-500 outline-none">
+                <label class="settings-label">Voz</label>
+                <select id="voice-select" class="dark-select w-full rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
                     <option value="">Voz automática</option>
                 </select>
             </div>
             
             <!-- Clear History -->
-            <button id="clear-history-btn" class="w-full py-2 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors text-sm">
+            <button id="clear-history-btn" class="w-full py-3 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors text-sm border border-red-500/30">
                 <i class="fas fa-trash-alt mr-2"></i>Borrar historial
             </button>
         </div>
         
         <!-- Chat Messages -->
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0f0f12]">
             <!-- Messages will be injected here -->
         </div>
         
         <!-- Player Controls -->
-        <div id="audio-player-controls" class="hidden px-4 py-3 border-t border-white/10 bg-dark-800/50 flex items-center justify-between">
+        <div id="audio-player-controls" class="hidden px-4 py-3 border-t border-[#3a3a42] bg-[#232329] flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <button id="player-play-pause-btn" class="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-dark hover:bg-amber-400 transition-colors">
+                <button id="player-play-pause-btn" class="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-black hover:bg-amber-400 transition-colors">
                     <i class="fas fa-pause text-xs"></i>
                 </button>
                 <button id="player-stop-btn" class="text-gray-400 hover:text-red-400">
@@ -687,13 +839,13 @@ volumes:
         </div>
         
         <!-- Input Area -->
-        <div class="p-4 border-t border-white/10 bg-dark-800/30">
-            <div class="flex items-center gap-2">
-                <button id="mic-btn" class="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-gray-400 hover:text-amber-400 hover:bg-white/20 transition-all">
+        <div class="input-area p-4">
+            <div class="flex items-end gap-2">
+                <button id="mic-btn" class="w-10 h-10 bg-[#232329] rounded-full flex items-center justify-center text-gray-400 hover:text-amber-400 hover:bg-[#2a2a32] transition-all border border-[#3a3a42] flex-shrink-0">
                     <i class="fas fa-microphone text-sm"></i>
                 </button>
-                <input type="text" id="chat-input" class="flex-1 bg-dark-800 border border-white/10 rounded-full px-4 py-2 text-sm text-light placeholder-gray-500 focus:border-amber-500 outline-none" placeholder="Escribe o habla...">
-                <button id="send-btn" class="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center text-dark hover:bg-amber-400 transition-all">
+                <textarea id="chat-input" class="flex-1 rounded-xl px-4 py-3 text-sm resize-none" rows="1" placeholder="Escribe tu mensaje..."></textarea>
+                <button id="send-btn" class="w-10 h-10 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full flex items-center justify-center text-black hover:shadow-lg hover:shadow-amber-500/20 transition-all flex-shrink-0">
                     <i class="fas fa-paper-plane text-sm"></i>
                 </button>
             </div>
@@ -701,19 +853,19 @@ volumes:
     </div>
     
     <!-- Confirm Modal -->
-    <div id="confirm-modal" class="hidden fixed inset-0 bg-black/50 z-[70] items-center justify-center">
-        <div class="bg-dark-800 border border-white/20 rounded-xl p-6 max-w-sm mx-4">
-            <p id="confirm-message" class="text-light mb-4"></p>
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black/70 z-[70] items-center justify-center backdrop-blur-sm">
+        <div class="bg-[#1a1a1f] border border-[#3a3a42] rounded-xl p-6 max-w-sm mx-4">
+            <p id="confirm-message" class="text-white mb-4"></p>
             <div class="flex gap-3 justify-end">
                 <button id="confirm-cancel-btn" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancelar</button>
-                <button id="confirm-ok-btn" class="px-4 py-2 bg-amber-500 text-dark rounded hover:bg-amber-400 transition-colors">Confirmar</button>
+                <button id="confirm-ok-btn" class="px-4 py-2 bg-amber-500 text-black rounded-lg hover:bg-amber-400 transition-colors">Confirmar</button>
             </div>
         </div>
     </div>
     
     <!-- Toast Notification -->
     <div id="notification-toast" class="fixed bottom-24 right-6 z-[80] hidden transition-all duration-300 translate-x-10 opacity-0">
-        <div class="bg-dark-800 border border-amber-500/20 text-light px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 backdrop-blur-xl">
+        <div class="toast-notification px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3">
             <i id="notification-icon" class="fas fa-info-circle text-amber-400"></i>
             <span id="notification-message" class="text-sm"></span>
         </div>
