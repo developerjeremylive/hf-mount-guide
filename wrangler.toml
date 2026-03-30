@@ -1,0 +1,14 @@
+name = "hf-mount-guide"
+main = "worker.js"
+compatibility_date = "2023-12-01"
+
+# [vars]
+# HF_TOKEN will be set as a secret
+
+# Uncomment for local development
+# [dev]
+# url = "localhost:8787"
+
+# Account & Zone configuration (optional)
+# account_id = "your-account-id"
+# zone_id = "your-zone-id"
