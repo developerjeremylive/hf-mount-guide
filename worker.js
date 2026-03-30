@@ -1,14 +1,11 @@
 /**
  * hf-mount Guide - Cloudflare Worker Proxy
- * 
- * Try multiple HF endpoints
  */
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     
-    // CORS headers
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -28,25 +25,36 @@ export default {
     if (!modelId) {
       return new Response(JSON.stringify({
         status: 'ok',
-        message: 'hf-mount Proxy Worker',
-        usage: 'POST /model-name with {"inputs": "prompt"}'
+        message: 'hf-mount Proxy Worker'
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Get API key
+    // Get API key - clean it up
     const authHeader = request.headers.get('Authorization');
-    let apiKey = authHeader ? authHeader.replace('Bearer ', '') : env.HF_TOKEN;
+    let apiKey = null;
     
-    if (apiKey && !apiKey.startsWith('hf_')) {
-      apiKey = 'hf_' + apiKey;
+    // From Authorization header (remove Bearer if present)
+    if (authHeader) {
+      apiKey = authHeader.replace('Bearer ', '').replace('Bearer', '').trim();
     }
     
-    const queryKey = url.searchParams.get('key');
-    if (queryKey) {
-      apiKey = queryKey.startsWith('hf_') ? queryKey : 'hf_' + queryKey;
+    // Fallback to environment
+    if (!apiKey && env.HF_TOKEN) {
+      apiKey = env.HF_TOKEN;
+    }
+    
+    // From query
+    if (!apiKey && url.searchParams.get('key')) {
+      apiKey = url.searchParams.get('key');
+    }
+    
+    // Clean up and ensure hf_ prefix
+    if (apiKey) {
+      apiKey = apiKey.replace('hf_', '').trim();
+      apiKey = 'hf_' + apiKey;
     }
     
     if (!apiKey || apiKey === 'hf_') {
@@ -77,53 +85,28 @@ export default {
         }
       };
 
-      // Try multiple HF endpoints
-      const endpoints = [
-        `https://router.huggingface.co/models/${modelId}`,
-        `https://api-inference.huggingface.co/models/${modelId}`,
-      ];
+      // Try router endpoint
+      const hfUrl = `https://router.huggingface.co/models/${modelId}`;
       
-      let lastError = null;
-      
-      for (const hfUrl of endpoints) {
-        try {
-          const hfResponse = await fetch(hfUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(hfBody)
-          });
+      const hfResponse = await fetch(hfUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(hfBody)
+      });
 
-          // If we get a response (not 404), return it
-          if (hfResponse.status !== 404) {
-            const responseText = await hfResponse.text();
-            let responseData;
-            try {
-              responseData = JSON.parse(responseText);
-            } catch (e) {
-              responseData = { error: responseText };
-            }
-            
-            return new Response(JSON.stringify(responseData), {
-              status: hfResponse.status,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            });
-          }
-          
-          lastError = { url: hfUrl, status: hfResponse.status };
-        } catch (e) {
-          lastError = { url: hfUrl, error: e.message };
-        }
+      const responseText = await hfResponse.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        responseData = { error: responseText };
       }
-      
-      // All endpoints failed
-      return new Response(JSON.stringify({ 
-        error: `Model not found or access denied. Tried: ${endpoints.join(', ')}`,
-        details: lastError
-      }), {
-        status: 404,
+
+      return new Response(JSON.stringify(responseData), {
+        status: hfResponse.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
 
