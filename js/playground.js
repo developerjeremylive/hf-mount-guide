@@ -317,8 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Authorization': `Bearer ${PG_STATE.apiKey}`
                 };
             } else {
-                // Direct call (will have CORS issues)
-                apiUrl = `https://api-inference.huggingface.co/models/${PG_STATE.selectedModel}`;
+                // Direct call (will have CORS issues) - updated to use router
+                apiUrl = `https://router.huggingface.co/${PG_STATE.selectedModel}`;
                 headers = {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${PG_STATE.apiKey}`
