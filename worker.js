@@ -1,7 +1,7 @@
 /**
  * hf-mount Guide - Cloudflare Worker Proxy
  * 
- * Updated for Hugging Face Router API
+ * Try multiple HF endpoints
  */
 
 export default {
@@ -15,17 +15,14 @@ export default {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
     };
 
-    // Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // Skip static files
-    if (url.pathname === '/favicon.ico' || url.pathname === '/robots.txt') {
+    if (url.pathname === '/favicon.ico') {
       return new Response('Not Found', { status: 404 });
     }
 
-    // Get model ID from path
     let modelId = url.pathname.replace(/^\//, '').replace(/^models\//, '');
     
     if (!modelId) {
@@ -39,35 +36,28 @@ export default {
       });
     }
 
-    // Get API key from header or env
+    // Get API key
     const authHeader = request.headers.get('Authorization');
     let apiKey = authHeader ? authHeader.replace('Bearer ', '') : env.HF_TOKEN;
     
-    // Add hf_ prefix if missing
     if (apiKey && !apiKey.startsWith('hf_')) {
       apiKey = 'hf_' + apiKey;
     }
     
-    // Check query param too
     const queryKey = url.searchParams.get('key');
     if (queryKey) {
       apiKey = queryKey.startsWith('hf_') ? queryKey : 'hf_' + queryKey;
     }
     
     if (!apiKey || apiKey === 'hf_') {
-      return new Response(JSON.stringify({ 
-        error: 'API Key requerida. Configura HF_TOKEN como secret o pasa ?key=tu_api_key' 
-      }), {
+      return new Response(JSON.stringify({ error: 'API Key requerida' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     try {
-      // Get request body
       const requestBody = await request.text();
-      
-      // Parse body
       let bodyObj = {};
       try {
         bodyObj = requestBody ? JSON.parse(requestBody) : {};
@@ -75,64 +65,73 @@ export default {
         bodyObj = {};
       }
       
-      // Ensure inputs exists
       const inputs = bodyObj.inputs || bodyObj.input || bodyObj.prompt || '';
-      
-      // Build HF request URL
-      const hfUrl = `https://router.huggingface.co/models/${modelId}`;
       
       const hfBody = {
         inputs: inputs,
         parameters: {
           temperature: bodyObj.parameters?.temperature || 0.7,
-          max_new_tokens: bodyObj.parameters?.max_new_tokens || bodyObj.parameters?.max_tokens || 256,
+          max_new_tokens: Math.min(bodyObj.parameters?.max_new_tokens || 128, 512),
           return_full_text: false,
-          do_sample: bodyObj.parameters?.do_sample ?? true,
+          do_sample: true,
         }
       };
 
-      // Make request to HF with Bearer prefix
-      const hfResponse = await fetch(hfUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(hfBody)
-      });
-
-      const responseText = await hfResponse.text();
+      // Try multiple HF endpoints
+      const endpoints = [
+        `https://router.huggingface.co/models/${modelId}`,
+        `https://api-inference.huggingface.co/models/${modelId}`,
+      ];
       
-      // Try to parse JSON
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (e) {
-        responseData = { error: responseText };
-      }
+      let lastError = null;
+      
+      for (const hfUrl of endpoints) {
+        try {
+          const hfResponse = await fetch(hfUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(hfBody)
+          });
 
-      return new Response(JSON.stringify(responseData), {
-        status: hfResponse.status,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
+          // If we get a response (not 404), return it
+          if (hfResponse.status !== 404) {
+            const responseText = await hfResponse.text();
+            let responseData;
+            try {
+              responseData = JSON.parse(responseText);
+            } catch (e) {
+              responseData = { error: responseText };
+            }
+            
+            return new Response(JSON.stringify(responseData), {
+              status: hfResponse.status,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            });
+          }
+          
+          lastError = { url: hfUrl, status: hfResponse.status };
+        } catch (e) {
+          lastError = { url: hfUrl, error: e.message };
         }
+      }
+      
+      // All endpoints failed
+      return new Response(JSON.stringify({ 
+        error: `Model not found or access denied. Tried: ${endpoints.join(', ')}`,
+        details: lastError
+      }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
 
     } catch (error) {
-      return new Response(JSON.stringify({ 
-        error: `Proxy error: ${error.message}` 
-      }), {
+      return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
   }
 };
-
-/*
- * CONFIGURATION:
- * 1. Set HF_TOKEN secret in Cloudflare Worker settings
- * 2. Deploy and use
- */
