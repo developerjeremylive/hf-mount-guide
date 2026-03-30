@@ -44,12 +44,34 @@
             background: rgba(0, 0, 0, 0.7);
         }
         
-        /* Playground Panel */
+        /* Playground Panel - Full Screen */
         #playground-panel {
-            box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6);
+            box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
             background: var(--bg-primary) !important;
             width: 100%;
-            max-width: 900px;
+            max-width: 100vw;
+            height: 100vh;
+            max-height: 100vh;
+            border-radius: 0;
+            top: 0;
+            left: 0;
+            transform: translateY(0);
+            transform: translateX(0);
+        }
+        
+        #playground-panel.translate-y-full {
+            transform: translateY(100%);
+        }
+        
+        /* Full screen chat area */
+        #playground-chat {
+            height: calc(100vh - 140px);
+            max-height: calc(100vh - 140px);
+        }
+        
+        /* Model list in settings - larger */
+        #model-list {
+            height: 300px;
         }
         
         /* Settings Modal - Full opaque background */
@@ -893,56 +915,53 @@ volumes:
         </div>
     </div>
 
-    <!-- Playground Panel -->
-    <div id="playground-overlay" class="fixed inset-0 z-[55] hidden transition-opacity duration-300 flex items-center justify-center p-4"></div>
+    <!-- Playground Panel - Full Screen Modal -->
+    <div id="playground-overlay" class="fixed inset-0 z-[55] hidden transition-opacity duration-300 bg-black/90 backdrop-blur-md"></div>
     
-    <div id="playground-panel" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl max-h-[90vh] bg-[#0f0f12] rounded-2xl border border-[#3a3a42] shadow-2xl transform translate-y-full transition-transform duration-300 z-[60] overflow-hidden flex flex-col">
+    <div id="playground-panel" class="fixed inset-0 w-full h-full bg-[#0f0f12] transform translate-y-full transition-transform duration-300 z-[60] flex flex-col">
         <!-- Header -->
-        <div class="panel-header px-4 py-3 flex items-center justify-between flex-shrink-0">
-            <div class="flex items-center gap-3">
-                <i class="fas fa-robot text-purple-400 text-xl"></i>
+        <div class="panel-header px-6 py-4 flex items-center justify-between flex-shrink-0 border-b border-[#3a3a42]">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-robot text-white text-xl"></i>
+                </div>
                 <div>
-                    <h3 class="text-white font-semibold text-sm">hf-mount Playground</h3>
-                    <p class="text-purple-400 text-[10px] font-mono" id="playground-model-status">Selecciona un modelo</p>
+                    <h3 class="text-white font-bold text-lg">hf-mount Playground</h3>
+                    <p class="text-purple-400 text-xs font-mono" id="playground-model-status">Selecciona un modelo</p>
                 </div>
             </div>
-            <div class="flex items-center gap-1">
-                <button id="playground-settings-btn" class="text-gray-400 hover:text-purple-400 p-2 transition-colors" title="Configuración">
-                    <i class="fas fa-cog text-sm"></i>
+            <div class="flex items-center gap-3">
+                <button id="playground-settings-btn" class="px-4 py-2 bg-[#232329] text-gray-400 hover:text-purple-400 rounded-lg transition-colors border border-[#3a3a42]" title="Configuración">
+                    <i class="fas fa-cog"></i>
                 </button>
-                <button id="playground-close-btn" class="text-gray-400 hover:text-red-400 p-2 transition-colors" title="Cerrar">
-                    <i class="fas fa-times text-sm"></i>
+                <button id="playground-close-btn" class="w-10 h-10 bg-[#232329] text-gray-400 hover:text-red-400 rounded-lg transition-colors flex items-center justify-center border border-[#3a3a42]" title="Cerrar">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
         </div>
         
         <!-- Settings Panel -->
-        <div id="playground-settings-modal" class="absolute inset-x-0 top-[52px] bottom-0 bg-[#0f0f12] z-20 p-4 hidden flex-col border-t border-[#3a3a42] animate-fade-in overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h4 class="text-white font-semibold">Configuración</h4>
-                <button id="close-playground-settings-btn" class="text-gray-400 hover:text-red-400">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="mb-4">
-                <label class="settings-label">Hugging Face API Key</label>
-                <input type="password" id="hf-api-key" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="hf_...">
-            </div>
-            
-            <div class="mb-4">
-                <label class="settings-label">Buscar modelo</label>
-                <input type="text" id="model-search" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="gpt2, llama, mistral...">
-            </div>
-            
-            <div class="mb-4">
-                <label class="settings-label">Modelos de Generación de Texto</label>
-                <div id="model-list" class="h-48 overflow-y-auto border border-[#3a3a42] rounded-lg p-2 space-y-1">
-                    <div class="text-gray-500 text-sm p-2">Cargando modelos...</div>
+        <div id="playground-settings-modal" class="absolute inset-0 top-[76px] bg-[#0f0f12] z-30 p-6 hidden flex-row gap-6 border-t border-[#3a3a42] animate-fade-in">
+            <!-- Left: Config -->
+            <div class="w-1/3 flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 class="text-white font-semibold">Configuración</h4>
+                    <button id="close-playground-settings-btn" class="text-gray-400 hover:text-red-400">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4 mb-4">
+                
+                <div class="mb-4">
+                    <label class="settings-label">Hugging Face API Key</label>
+                    <input type="password" id="hf-api-key" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="hf_...">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="settings-label">Buscar modelo</label>
+                    <input type="text" id="model-search" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="gpt2, llama, mistral...">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="settings-label">Temperature</label>
                     <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" class="w-full accent-purple-500">
@@ -957,23 +976,35 @@ volumes:
             <button id="load-models-btn" class="w-full py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-semibold">
                 <i class="fas fa-sync-alt mr-2"></i>Actualizar Modelos
             </button>
+            </div>
+            
+            <!-- Right: Model List -->
+            <div class="flex-1 flex flex-col">
+                <label class="settings-label mb-2">Modelos de Generación de Texto</label>
+                <div id="model-list" class="flex-1 overflow-y-auto border border-[#3a3a42] rounded-lg p-3 space-y-2">
+                    <div class="text-gray-500 text-sm p-2">Cargando modelos...</div>
+                </div>
+            </div>
         </div>
         
         <!-- Chat Area -->
-        <div id="playground-chat" class="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0f0f12]">
+        <div id="playground-chat" class="flex-1 overflow-y-auto p-6 space-y-4 bg-[#0f0f12]">
             <div class="flex flex-col items-center justify-center h-full opacity-50">
-                <i class="fas fa-robot text-4xl text-gray-600 mb-4"></i>
-                <p class="text-gray-500 text-sm">Selecciona un modelo y comienza a chatear</p>
-                <p class="text-gray-600 text-xs mt-2">Los modelos se cargan sin descargar usando hf-mount</p>
+                <i class="fas fa-robot text-6xl text-gray-700 mb-6"></i>
+                <p class="text-gray-400 text-lg">Selecciona un modelo y comienza a chatear</p>
+                <p class="text-gray-600 text-sm mt-3">Los modelos se cargan sin descargar usando hf-mount</p>
             </div>
         </div>
         
         <!-- Input Area -->
-        <div class="input-area p-4 flex-shrink-0">
-            <div class="flex items-end gap-2">
-                <textarea id="playground-chat-input" class="flex-1 rounded-xl px-4 py-3 text-sm resize-none" rows="1" placeholder="Escribe tu mensaje..."></textarea>
-                <button id="playground-send-btn" class="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white hover:shadow-lg hover:shadow-purple-500/20 transition-all flex-shrink-0">
-                    <i class="fas fa-paper-plane text-sm"></i>
+        <div class="input-area p-6 flex-shrink-0 bg-[#1a1a1f] border-t border-[#3a3a42]">
+            <div class="flex items-end gap-4 max-w-4xl mx-auto">
+                <button id="mic-btn" class="w-12 h-12 bg-[#232329] rounded-full flex items-center justify-center text-gray-400 hover:text-purple-400 hover:bg-[#2a2a32] transition-all border border-[#3a3a42] flex-shrink-0">
+                    <i class="fas fa-microphone text-lg"></i>
+                </button>
+                <textarea id="playground-chat-input" class="flex-1 rounded-2xl px-6 py-4 text-base resize-none bg-[#232329] border border-[#3a3a42] text-white placeholder-gray-500 focus:border-purple-500 outline-none" rows="1" placeholder="Escribe tu mensaje..."></textarea>
+                <button id="playground-send-btn" class="w-12 h-12 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all flex-shrink-0">
+                    <i class="fas fa-paper-plane text-lg"></i>
                 </button>
             </div>
         </div>
