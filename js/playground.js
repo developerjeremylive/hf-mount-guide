@@ -314,14 +314,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 apiUrl = `${PROXY_URL}/${PG_STATE.selectedModel}`;
                 headers = {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer hf_${PG_STATE.apiKey}`
+                    'Authorization': `Bearer ${PG_STATE.apiKey}`
                 };
             } else {
                 // Direct call
                 apiUrl = `https://router.huggingface.co/models/${PG_STATE.selectedModel}`;
                 headers = {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer hf_${PG_STATE.apiKey}`
+                    'Authorization': `Bearer ${PG_STATE.apiKey}`
                 };
             }
             
