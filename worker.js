@@ -1,6 +1,6 @@
 /**
  * hf-mount Guide - Cloudflare Worker Proxy
- * Direct HF Inference API
+ * Debug version - try all HF endpoints
  */
 
 export default {
@@ -20,31 +20,21 @@ export default {
     let modelId = url.pathname.replace(/^\//, '');
     
     if (!modelId || modelId === 'favicon.ico') {
-      return new Response('OK', { status: 200 });
+      return new Response(JSON.stringify({ 
+        status: 'alive',
+        message: 'hf-mount worker running'
+      }), { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
-    // Normalize model ID - add org prefix for common models
-    const modelMap = {
-      'gpt2': 'openai-community/gpt2',
-      'gpt2-medium': 'gpt2-medium',
-      'gpt2-large': 'gpt2-large',
-      'llama-3.2-1b': 'meta-llama/Llama-3.2-1B',
-      'llama-3.2-1b-instruct': 'meta-llama/Llama-3.2-1B-Instruct',
-      'llama-3.1-8b': 'meta-llama/Llama-3.1-8B',
-      'llama-3.1-8b-instruct': 'meta-llama/Llama-3.1-8B-Instruct',
-    };
-    
-    // Check if model needs normalization
-    if (modelMap[modelId.toLowerCase()]) {
-      modelId = modelMap[modelId.toLowerCase()];
-    }
-
-    // Get API key
+    // Get API key - keep full Bearer format
     const authHeader = request.headers.get('Authorization');
     let apiKey = authHeader || (env.HF_TOKEN ? `Bearer ${env.HF_TOKEN}` : '');
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'No API key' }), {
+      return new Response(JSON.stringify({ error: 'No API key provided' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -61,45 +51,60 @@ export default {
     
     const inputs = bodyObj.inputs || bodyObj.prompt || 'Hello';
     
-    // Use the serverless inference API
-    const hfUrl = `https://router.huggingface.co/models/${modelId}`;
+    // Try multiple HF endpoints
+    const endpoints = [
+      `https://router.huggingface.co/models/${modelId}`,
+      `https://api-inference.huggingface.co/models/${modelId}`,
+      `https://${modelId.replace('/', '-')}.safetensors-infer.hf.space/api/infer`,
+    ];
     
-    const hfBody = {
-      inputs: inputs,
-      parameters: {
-        max_new_tokens: bodyObj.parameters?.max_new_tokens || 100,
-        temperature: bodyObj.parameters?.temperature || 0.7,
-        return_full_text: false
-      }
-    };
+    let lastResponse = null;
+    let lastError = null;
+    
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            inputs: inputs,
+            parameters: {
+              max_new_tokens: 50,
+              temperature: 0.7
+            }
+          })
+        });
 
-    try {
-      const hfResponse = await fetch(hfUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(hfBody)
-      });
-
-      const responseText = await hfResponse.text();
-      
-      // Return the response with CORS headers
-      return new Response(responseText, {
-        status: hfResponse.status,
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json',
-          'Content-Length': responseText.length
+        const responseText = await response.text();
+        
+        // If we get something other than "Not Found" or "Model not found", use it
+        if (response.status !== 404 && !responseText.includes('Not Found')) {
+          return new Response(responseText, {
+            status: response.status,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
         }
-      });
-      
-    } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+        
+        lastResponse = { status: response.status, body: responseText.substring(0, 200) };
+      } catch (e) {
+        lastError = e.message;
+      }
     }
+    
+    // All endpoints failed - return debug info
+    return new Response(JSON.stringify({
+      error: 'Model not found or access denied',
+      model: modelId,
+      triedEndpoints: endpoints,
+      lastResponse: lastResponse,
+      lastError: lastError,
+      hint: 'Make sure: 1) Model name is correct 2) You have access to the model on HF 3) Your API key is valid'
+    }), {
+      status: 404,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 };
