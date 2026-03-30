@@ -88,7 +88,8 @@ export default {
     try {
       // Forward request a Hugging Face Inference API
       // Using router.huggingface.co (api-inference is deprecated)
-      const hfUrl = `https://router.huggingface.co/${modelId}`;
+      // Format: https://router.huggingface.co/models/{model_id}
+      const hfUrl = `https://router.huggingface.co/models/${modelId}`;
       
       // Get request body
       const requestBody = await request.text();
