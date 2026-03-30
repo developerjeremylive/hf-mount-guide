@@ -304,9 +304,8 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
         
         try {
-            // Use Cloudflare Worker proxy - replace with YOUR worker URL
-            // e.g., https://hf-mount-proxy.yourname.workers.dev
-            const PROXY_URL = null; // SET YOUR CLOUDFLARE WORKER URL HERE
+            // Use Cloudflare Worker proxy
+            const PROXY_URL = 'https://livehfmount.etheroi.com';
             
             let apiUrl, headers;
             
