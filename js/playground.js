@@ -310,12 +310,20 @@ document.addEventListener('DOMContentLoaded', () => {
             let apiUrl, headers;
             
             if (PROXY_URL) {
-                // Using proxy - send model ID and full prompt directly
+                // Using proxy
                 apiUrl = `${PROXY_URL}/${PG_STATE.selectedModel}`;
                 headers = {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer hf_${PG_STATE.apiKey}`
                 };
+            } else {
+                // Direct call
+                apiUrl = `https://router.huggingface.co/models/${PG_STATE.selectedModel}`;
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer hf_${PG_STATE.apiKey}`
+                };
+            }
             
             const systemPrompt = "Eres un asistente útil. Responde en español.";
             const conversation = chat.messages
