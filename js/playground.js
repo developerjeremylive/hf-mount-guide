@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Send Message - Using JSONBin.io as CORS Proxy Alternative ---
+    // --- Send Message - Using Cloudflare Worker Proxy ---
     async function sendMessage() {
         if (!PG_UI.input) return;
         const text = PG_UI.input.value.trim();
@@ -304,39 +304,39 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
         
         try {
-            // Method 1: Try direct API call with correct headers
-            await tryDirectAPI(text, botMessageId, chat);
+            // Use Cloudflare Worker proxy - replace with YOUR worker URL
+            // e.g., https://hf-mount-proxy.yourname.workers.dev
+            const PROXY_URL = null; // SET YOUR CLOUDFLARE WORKER URL HERE
             
-        } catch (error) {
-            // Method 2: Try using fetch with no-cors mode (will get opaque response)
-            try {
-                await tryNoCorsMode(text, botMessageId, chat);
-            } catch (error2) {
-                handleError(error, botMessageId, chat);
+            let apiUrl, headers;
+            
+            if (PROXY_URL) {
+                // Using proxy (Cloudflare Worker)
+                apiUrl = `${PROXY_URL}/${PG_STATE.selectedModel}`;
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${PG_STATE.apiKey}`
+                };
+            } else {
+                // Direct call (will have CORS issues)
+                apiUrl = `https://api-inference.huggingface.co/models/${PG_STATE.selectedModel}`;
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${PG_STATE.apiKey}`
+                };
             }
-        }
-    }
-
-    async function tryDirectAPI(text, botMessageId, chat) {
-        const modelId = PG_STATE.selectedModel;
-        
-        // Build a proper prompt based on the model
-        const systemPrompt = "Eres un asistente útil. Responde en español.";
-        const conversation = chat.messages
-            .filter(m => !m.streaming)
-            .map(m => m.role === 'user' ? `Usuario: ${m.content}` : `Asistente: ${m.content}`)
-            .join('\n');
-        
-        const fullPrompt = `${systemPrompt}\n\n${conversation}\nAsistente:`;
-        
-        const response = await fetch(
-            `https://api-inference.huggingface.co/models/${modelId}`,
-            {
+            
+            const systemPrompt = "Eres un asistente útil. Responde en español.";
+            const conversation = chat.messages
+                .filter(m => !m.streaming)
+                .map(m => m.role === 'user' ? `Usuario: ${m.content}` : `Asistente: ${m.content}`)
+                .join('\n');
+            
+            const fullPrompt = `${systemPrompt}\n\n${conversation}\nAsistente:`;
+            
+            const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${PG_STATE.apiKey}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: headers,
                 body: JSON.stringify({
                     inputs: fullPrompt,
                     parameters: {
@@ -347,43 +347,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         top_p: 0.95
                     }
                 })
+            });
+            
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.error || `HTTP ${response.status}`);
             }
-        );
-        
-        if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            throw new Error(err.error || `HTTP ${response.status}`);
+            
+            const data = await response.json();
+            processResponse(data, botMessageId, chat);
+            
+        } catch (error) {
+            handleError(error, botMessageId, chat);
         }
-        
-        const data = await response.json();
-        processResponse(data, botMessageId, chat);
-    }
-
-    async function tryNoCorsMode(text, botMessageId, chat) {
-        // This won't work for reading the response, but let's try
-        const modelId = PG_STATE.selectedModel;
-        
-        const response = await fetch(
-            `https://api-inference.huggingface.co/models/${modelId}`,
-            {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: {
-                    'Authorization': `Bearer ${PG_STATE.apiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    inputs: text,
-                    parameters: {
-                        max_new_tokens: 200,
-                        temperature: 0.7
-                    }
-                })
-            }
-        );
-        
-        // With no-cors, response will be opaque
-        throw new Error('CORS blocking - response is opaque');
     }
 
     function processResponse(data, botMessageId, chat) {
@@ -424,22 +400,24 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let errorMsg = error.message;
         
-        // Detect specific errors
+        // Detect specific errors and provide solutions
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-            errorMsg = 'Error de conexión. La API de Hugging Face puede estar bloqueada por CORS.';
+            errorMsg = '❌ Error de CORS. La API de Hugging Face está bloqueada por el navegador.';
         } else if (error.message.includes('HTTP 403')) {
-            errorMsg = 'Error 403: Tu API Key puede no tener permisos o el modelo requiere aceptación de términos.';
+            errorMsg = 'Error 403: Tu API Key no tiene permisos o el modelo requiere acepta términos en huggingface.co';
         } else if (error.message.includes('HTTP 429')) {
             errorMsg = 'Error 429: Demasiadas solicitudes. Espera un momento e intenta de nuevo.';
         } else if (error.message.includes('HTTP 422')) {
-            errorMsg = 'Error 422: El modelo no acepta el formato de solicitud. Prueba otro modelo.';
+            errorMsg = 'Error 422: El modelo no acepta el formato. Prueba otro modelo.';
+        } else if (error.message.includes('HTTP 410')) {
+            errorMsg = 'Error 410 (Gone): El modelo puede haber cambiado de nombre. Prueba recargar la lista de modelos.';
         }
         
         const errDiv = document.createElement('div');
         errDiv.className = 'flex justify-start animate-fade-in';
         errDiv.innerHTML = `
-            <div class="pg-system-message px-4 py-2 max-w-[85%] text-xs">
-                ❌ ${errorMsg}
+            <div class="pg-system-message px-4 py-3 max-w-[85%] text-sm">
+                ${errorMsg}
             </div>
         `;
         PG_UI.chatContainer.appendChild(errDiv);
