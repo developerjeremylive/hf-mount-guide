@@ -1,6 +1,6 @@
 /**
  * hf-mount Guide - Cloudflare Worker Proxy
- * Using HF Router API with correct format
+ * Direct HF Inference API
  */
 
 export default {
@@ -23,16 +23,25 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    // Get API key from Authorization header
-    const authHeader = request.headers.get('Authorization');
-    let apiKey = '';
+    // Normalize model ID - add org prefix for common models
+    const modelMap = {
+      'gpt2': 'openai-community/gpt2',
+      'gpt2-medium': 'gpt2-medium',
+      'gpt2-large': 'gpt2-large',
+      'llama-3.2-1b': 'meta-llama/Llama-3.2-1B',
+      'llama-3.2-1b-instruct': 'meta-llama/Llama-3.2-1B-Instruct',
+      'llama-3.1-8b': 'meta-llama/Llama-3.1-8B',
+      'llama-3.1-8b-instruct': 'meta-llama/Llama-3.1-8B-Instruct',
+    };
     
-    if (authHeader) {
-      // Keep full Bearer format
-      apiKey = authHeader;
-    } else if (env.HF_TOKEN) {
-      apiKey = `Bearer ${env.HF_TOKEN}`;
+    // Check if model needs normalization
+    if (modelMap[modelId.toLowerCase()]) {
+      modelId = modelMap[modelId.toLowerCase()];
     }
+
+    // Get API key
+    const authHeader = request.headers.get('Authorization');
+    let apiKey = authHeader || (env.HF_TOKEN ? `Bearer ${env.HF_TOKEN}` : '');
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'No API key' }), {
@@ -41,7 +50,7 @@ export default {
       });
     }
 
-    // Get request body
+    // Parse request body
     const requestBody = await request.text();
     let bodyObj = {};
     try {
@@ -50,17 +59,16 @@ export default {
       bodyObj = {};
     }
     
-    const inputs = bodyObj.inputs || bodyObj.input || 'Hello';
+    const inputs = bodyObj.inputs || bodyObj.prompt || 'Hello';
     
-    // Use HF Router API - CORRECT FORMAT with /models/ prefix
-    // https://router.huggingface.co/models/{model_id}
+    // Use the serverless inference API
     const hfUrl = `https://router.huggingface.co/models/${modelId}`;
     
     const hfBody = {
       inputs: inputs,
       parameters: {
-        max_new_tokens: 50,
-        temperature: 0.7,
+        max_new_tokens: bodyObj.parameters?.max_new_tokens || 100,
+        temperature: bodyObj.parameters?.temperature || 0.7,
         return_full_text: false
       }
     };
@@ -77,9 +85,14 @@ export default {
 
       const responseText = await hfResponse.text();
       
+      // Return the response with CORS headers
       return new Response(responseText, {
         status: hfResponse.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Content-Length': responseText.length
+        }
       });
       
     } catch (error) {
