@@ -312,19 +312,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (PROXY_URL) {
                 // Using proxy - send model ID and full prompt directly
                 apiUrl = `${PROXY_URL}/${PG_STATE.selectedModel}`;
-                // Don't include Bearer prefix - worker handles it
                 headers = {
-                    'Content-Type': 'application/json'
-                };
-                // Include API key in body instead
-                const requestBody = {
-                    inputs: text,
-                    parameters: {
-                        temperature: PG_STATE.config.temperature,
-                        max_new_tokens: PG_STATE.config.maxTokens,
-                        return_full_text: false,
-                        do_sample: true
-                    }
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer hf_${PG_STATE.apiKey}`
                 };
             
             const systemPrompt = "Eres un asistente útil. Responde en español.";
