@@ -1,0 +1,13 @@
+{
+  "name": "hf-mount-guide",
+  "version": "1.0.0",
+  "description": "hf-mount Guide with Playground - Cloudflare Worker Proxy",
+  "main": "worker.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "keywords": ["huggingface", "hf-mount", "proxy", "cloudflare", "worker"],
+  "author": "Jeremy Live",
+  "license": "MIT"
+}
