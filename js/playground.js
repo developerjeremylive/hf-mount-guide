@@ -114,9 +114,9 @@ document.addEventListener('DOMContentLoaded', () => {
         PG_UI.loadModelsBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cargando...';
         
         try {
-            // Search for text generation models
+            // Search for text generation models (popular ones for chat)
             const response = await fetch(
-                'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=downloads&direction=-1&limit=50',
+                'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=downloads&direction=-1&limit=100',
                 {
                     headers: {
                         'Authorization': `Bearer ${PG_STATE.apiKey}`
@@ -129,10 +129,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const models = await response.json();
-            PG_STATE.modelList = models;
-            renderModelList(models);
+            // Filter to only popular chat models
+            const chatModels = models.filter(m => {
+                const id = m.id.toLowerCase();
+                return id.includes('chat') || id.includes('instruct') || id.includes('llama') || 
+                       id.includes('mistral') || id.includes('qwen') || id.includes('gemma') ||
+                       id.includes('phi') || id.includes('falcon') || id.includes('bloom');
+            });
             
-            showPGNotification(`Cargados ${models.length} modelos`);
+            // Take top 50 by downloads
+            PG_STATE.modelList = chatModels.slice(0, 50);
+            renderModelList(PG_STATE.modelList);
+            
+            showPGNotification(`Cargados ${PG_STATE.modelList.length} modelos`);
         } catch (error) {
             console.error('Error loading models:', error);
             showPGNotification('Error al cargar modelos. Verifica tu API Key.', 'error');
@@ -145,8 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderModelList(models) {
         const searchTerm = PG_UI.modelSearch.value.toLowerCase();
         const filtered = models.filter(m => 
-            m.id.toLowerCase().includes(searchTerm) ||
-            (m.pipeline_tag && m.pipeline_tag.toLowerCase().includes(searchTerm))
+            m.id.toLowerCase().includes(searchTerm)
         );
         
         PG_UI.modelList.innerHTML = '';
@@ -177,11 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('hf_selected_model', modelId);
         PG_UI.modelStatus.textContent = modelId;
         
-        // Update UI
         renderModelList(PG_STATE.modelList);
         showPGNotification(`Modelo seleccionado: ${modelId}`);
         
-        // Close settings
         toggleSettings();
     }
 
@@ -258,7 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatMessage(text) {
-        // Simple markdown-like formatting
         let formatted = text
             .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
             .replace(/`([^`]+)`/g, '<code class="bg-black/30 px-1 rounded font-mono text-xs">$1</code>')
@@ -288,25 +293,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Create chat if needed
         if (!PG_STATE.currentChatId) {
             createNewChat();
         }
         
-        // Clear input
         PG_UI.input.value = '';
         PG_UI.input.style.height = 'auto';
         
-        // Add user message
         const chat = PG_STATE.chats.find(c => c.id === PG_STATE.currentChatId);
         chat.messages.push({ role: 'user', content: text, timestamp: Date.now() });
         renderChat();
         
-        // Add empty bot message for streaming
+        // Create bot message container
         const botMessageId = 'msg_' + Date.now();
         chat.messages.push({ role: 'bot', content: '', timestamp: Date.now(), streaming: true });
         
-        // Create streaming UI element
         const div = document.createElement('div');
         div.className = 'flex justify-start animate-fade-in';
         div.id = botMessageId;
@@ -322,90 +323,153 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
         
         try {
-            // Use Hugging Face Inference API with streaming
+            // Use the correct API format for text generation
+            // First try the standard inference endpoint
+            const modelId = PG_STATE.selectedModel;
+            
+            // Build conversation context
+            const conversation = buildConversation(chat.messages);
+            
+            // Make request to inference API
             const response = await fetch(
-                `https://api-inference.huggingface.co/models/${PG_STATE.selectedModel}`,
+                `https://api-inference.huggingface.co/models/${modelId}`,
                 {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${PG_STATE.apiKey}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        inputs: buildPrompt(chat.messages),
+                        inputs: conversation,
                         parameters: {
                             temperature: PG_STATE.config.temperature,
                             max_new_tokens: PG_STATE.config.maxTokens,
                             return_full_text: false,
-                            do_sample: true
+                            do_sample: PG_STATE.config.temperature > 0,
+                            top_p: 0.95,
+                            repetition_penalty: 1.0
                         }
                     })
                 }
             );
             
             if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Error en la API');
+                // If first endpoint fails, try alternative format
+                const altResponse = await fetch(
+                    `https://api-inference.huggingface.co/models/${modelId}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${PG_STATE.apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            inputs: text,
+                            parameters: {
+                                temperature: PG_STATE.config.temperature,
+                                max_new_tokens: PG_STATE.config.maxTokens,
+                                return_full_text: false
+                            }
+                        })
+                    }
+                );
+                
+                if (!altResponse.ok) {
+                    const err = await altResponse.json();
+                    throw new Error(err.error || `Error: ${altResponse.status}`);
+                }
+                
+                const altData = await altResponse.json();
+                handleResponse(altData, botMessageId, chat);
+            } else {
+                const data = await response.json();
+                handleResponse(data, botMessageId, chat);
             }
-            
-            const data = await response.json();
-            
-            // Update the message with full response
-            const fullText = Array.isArray(data) ? data[0].generated_text : data.generated_text || '';
-            
-            // Remove streaming indicator and update content
-            const contentEl = document.getElementById(`${botMessageId}-content`);
-            const cursorEl = div.querySelector('.streaming-cursor');
-            if (cursorEl) cursorEl.remove();
-            if (contentEl) contentEl.innerHTML = formatMessage(fullText);
-            
-            // Update chat message
-            const msgIndex = chat.messages.findIndex(m => m.streaming);
-            if (msgIndex !== -1) {
-                chat.messages[msgIndex] = { role: 'bot', content: fullText, timestamp: Date.now() };
-            }
-            
-            PG_STATE.isStreaming = false;
-            saveChats();
-            scrollToBottom();
             
         } catch (error) {
             console.error('Error:', error);
-            
-            // Remove failed message
-            const failedDiv = document.getElementById(botMessageId);
-            if (failedDiv) failedDiv.remove();
-            
-            // Add error message
-            const errDiv = document.createElement('div');
-            errDiv.className = 'flex justify-start animate-fade-in';
-            errDiv.innerHTML = `
-                <div class="pg-system-message px-4 py-2 max-w-[85%] text-xs">
-                    ❌ Error: ${error.message}
-                </div>
-            `;
-            PG_UI.chatContainer.appendChild(errDiv);
-            
-            // Remove from chat
-            const msgIndex = chat.messages.findIndex(m => m.streaming);
-            if (msgIndex !== -1) {
-                chat.messages.splice(msgIndex, 1);
-            }
-            
-            PG_STATE.isStreaming = false;
-            scrollToBottom();
+            handleError(error, botMessageId, chat);
         }
     }
 
-    function buildPrompt(messages) {
-        // Build a conversation prompt
+    function handleResponse(data, botMessageId, chat) {
+        let fullText = '';
+        
+        if (Array.isArray(data)) {
+            fullText = data[0]?.generated_text || '';
+        } else if (data.generated_text) {
+            fullText = data.generated_text;
+        } else if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Extract just the response part (remove the prompt)
+        const userMessages = chat.messages.filter(m => m.role === 'user');
+        const lastUserMsg = userMessages[userMessages.length - 1]?.content || '';
+        
+        // Remove the input prompt from the response to get only the model's output
+        if (fullText.includes(lastUserMsg)) {
+            fullText = fullText.split(lastUserMsg)[1] || fullText;
+        }
+        
+        fullText = fullText.trim();
+        
+        const contentEl = document.getElementById(`${botMessageId}-content`);
+        const cursorEl = document.getElementById(botMessageId)?.querySelector('.streaming-cursor');
+        if (cursorEl) cursorEl.remove();
+        if (contentEl) contentEl.innerHTML = formatMessage(fullText);
+        
+        const msgIndex = chat.messages.findIndex(m => m.streaming);
+        if (msgIndex !== -1) {
+            chat.messages[msgIndex] = { role: 'bot', content: fullText, timestamp: Date.now() };
+        }
+        
+        PG_STATE.isStreaming = false;
+        saveChats();
+        scrollToBottom();
+    }
+
+    function handleError(error, botMessageId, chat) {
+        const failedDiv = document.getElementById(botMessageId);
+        if (failedDiv) failedDiv.remove();
+        
+        // Check if it's a CORS error
+        const isCorsError = error.message.includes('Failed to fetch') || error.message.includes('NetworkError');
+        
+        let errorMsg = error.message;
+        if (isCorsError) {
+            errorMsg = 'Error CORS: El navegador no permite requests directos a la API de Hugging Face desde el navegador. Usa una extensión de CORS o configura un proxy.';
+        }
+        
+        const errDiv = document.createElement('div');
+        errDiv.className = 'flex justify-start animate-fade-in';
+        errDiv.innerHTML = `
+            <div class="pg-system-message px-4 py-2 max-w-[85%] text-xs">
+                ❌ ${errorMsg}
+            </div>
+        `;
+        PG_UI.chatContainer.appendChild(errDiv);
+        
+        const msgIndex = chat.messages.findIndex(m => m.streaming);
+        if (msgIndex !== -1) {
+            chat.messages.splice(msgIndex, 1);
+        }
+        
+        PG_STATE.isStreaming = false;
+        scrollToBottom();
+        
+        showPGNotification('Error al conectar con el modelo', 'error');
+    }
+
+    function buildConversation(messages) {
         let prompt = '';
         
         messages.forEach(msg => {
-            if (msg.role === 'user') {
-                prompt += `User: ${msg.content}\n`;
+            if (msg.role === 'user' && !msg.streaming) {
+                prompt += `User: ${msg.content}\n\n`;
             } else if (msg.role === 'bot' && !msg.streaming) {
-                prompt += `Assistant: ${msg.content}\n`;
+                prompt += `Assistant: ${msg.content}\n\n`;
             }
         });
         
@@ -415,14 +479,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialize ---
     function init() {
-        // Set initial values
         if (PG_UI.apiKeyInput) PG_UI.apiKeyInput.value = PG_STATE.apiKey;
         if (PG_UI.temperature) PG_UI.temperature.value = PG_STATE.config.temperature;
         if (PG_UI.temperatureVal) PG_UI.temperatureVal.textContent = PG_STATE.config.temperature;
         if (PG_UI.maxTokens) PG_UI.maxTokens.value = PG_STATE.config.maxTokens;
         if (PG_STATE.selectedModel) PG_UI.modelStatus.textContent = PG_STATE.selectedModel;
         
-        // Event Listeners
         if (PG_UI.btn) PG_UI.btn.addEventListener('click', togglePlayground);
         if (PG_UI.closeBtn) PG_UI.closeBtn.addEventListener('click', togglePlayground);
         if (PG_UI.overlay) PG_UI.overlay.addEventListener('click', togglePlayground);
@@ -473,7 +535,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Initialize chat
         initPlaygroundChat();
     }
 
