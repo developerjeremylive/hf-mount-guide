@@ -1,4 +1,4 @@
-// Voice Agent & AI Assistant Logic
+// Voice Agent & AI Assistant Logic - Anthropic Claude Style
 // Integrates Gemini API, Web Speech API, and LocalStorage
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -79,6 +79,18 @@ document.addEventListener('DOMContentLoaded', () => {
         toastIcon: document.getElementById('notification-icon')
     };
 
+    // --- Auto-expand textarea ---
+    function adjustTextareaHeight() {
+        if (!UI.input) return;
+        
+        // Reset height to calculate proper scrollHeight
+        UI.input.style.height = 'auto';
+        
+        // Set new height based on content (min 48px, max 200px)
+        const newHeight = Math.min(Math.max(UI.input.scrollHeight, 48), 200);
+        UI.input.style.height = newHeight + 'px';
+    }
+
     // --- Notifications & Modals ---
 
     function showNotification(message, type = 'info') {
@@ -92,10 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (type === 'error') {
             UI.toastIcon.className = 'fas fa-exclamation-circle text-red-400';
-            UI.toast.firstElementChild.className = 'bg-dark-800 border border-red-500/20 text-light px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 backdrop-blur-xl';
+            UI.toast.firstElementChild.className = 'toast-notification px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3';
         } else {
             UI.toastIcon.className = 'fas fa-info-circle text-amber-400';
-            UI.toast.firstElementChild.className = 'bg-dark-800 border border-amber-500/20 text-light px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 backdrop-blur-xl';
+            UI.toast.firstElementChild.className = 'toast-notification px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3';
         }
 
         setTimeout(() => {
@@ -204,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (UI.input) {
             UI.input.value = '';
+            UI.input.style.height = 'auto';
             UI.input.focus();
         }
     }
@@ -227,16 +240,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const div = document.createElement('div');
             div.className = `flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`;
             const bubble = document.createElement('div');
-            bubble.className = msg.role === 'user' 
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-dark rounded-2xl rounded-tr-none px-4 py-3 max-w-[85%] text-sm shadow-md'
-                : 'bg-white/10 text-light rounded-2xl rounded-tl-none px-4 py-3 max-w-[85%] text-sm shadow-md';
+            
+            if (msg.role === 'user') {
+                bubble.className = 'user-message px-4 py-3 max-w-[85%] text-sm shadow-md';
+            } else if (msg.role === 'system') {
+                bubble.className = 'system-message px-4 py-2 max-w-[85%] text-xs';
+            } else {
+                bubble.className = 'bot-message px-4 py-3 max-w-[85%] text-sm shadow-md';
+            }
+            
             bubble.innerHTML = formatText(msg.content);
             div.appendChild(bubble);
             UI.chatContainer.appendChild(div);
         });
         
         scrollToBottom();
-        renderChatHistory();
     }
 
     function saveChats() {
@@ -250,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (firstMessage.length > 30) title += '...';
             chat.title = title;
             saveChats();
-            renderChatHistory();
         }
     }
 
@@ -260,7 +277,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showConfirm('¿Estás seguro de eliminar este chat?', () => {
             STATE.chats = STATE.chats.filter(c => c.id !== chatId);
             saveChats();
-            renderChatHistory();
             
             if (STATE.currentChatId === chatId) {
                 if (STATE.chats.length > 0) {
@@ -282,10 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function renderChatHistory() {
-        // Simple version - no history sidebar in this implementation
-    }
-
     // Expose for onclick events
     window.deleteChat = deleteChat;
 
@@ -305,8 +317,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (UI.sendBtn) UI.sendBtn.addEventListener('click', handleUserMessage);
             if (UI.input) {
-                UI.input.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') handleUserMessage();
+                // Auto-expand on input
+                UI.input.addEventListener('input', adjustTextareaHeight);
+                
+                // Submit on Enter (without shift for new line)
+                UI.input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleUserMessage();
+                    }
                 });
             }
             if (UI.micBtn) UI.micBtn.addEventListener('click', toggleVoiceRecognition);
@@ -514,6 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         UI.input.value = '';
+        UI.input.style.height = 'auto';
 
         addMessage('user', text);
 
@@ -551,10 +571,14 @@ document.addEventListener('DOMContentLoaded', () => {
         div.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`;
         
         const bubble = document.createElement('div');
-        bubble.className = role === 'user' 
-            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-dark rounded-2xl rounded-tr-none px-4 py-3 max-w-[85%] text-sm shadow-md'
-            : (role === 'system' ? 'bg-red-500/20 text-red-200 rounded-lg px-4 py-2 text-xs border border-red-500/30' 
-            : 'bg-white/10 text-light rounded-2xl rounded-tl-none px-4 py-3 max-w-[85%] text-sm shadow-md');
+        
+        if (role === 'user') {
+            bubble.className = 'user-message px-4 py-3 max-w-[85%] text-sm shadow-md';
+        } else if (role === 'system') {
+            bubble.className = 'system-message px-4 py-2 max-w-[85%] text-xs';
+        } else {
+            bubble.className = 'bot-message px-4 py-3 max-w-[85%] text-sm shadow-md';
+        }
         
         bubble.innerHTML = formatText(text);
         
@@ -578,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.id = id;
         div.className = 'flex justify-start animate-fade-in';
         div.innerHTML = `
-            <div class="bg-white/10 text-light rounded-2xl rounded-tl-none px-4 py-3 text-sm flex gap-2 items-center">
+            <div class="bot-message px-4 py-3 text-sm flex gap-2 items-center">
                 <div class="w-2 h-2 bg-amber-400 rounded-full animate-bounce"></div>
                 <div class="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
                 <div class="w-2 h-2 bg-amber-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
@@ -924,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
             STATE.isListening = false;
             if (UI.indicator) UI.indicator.classList.add('hidden');
             if (UI.micBtn) UI.micBtn.classList.remove('text-red-500', 'animate-pulse');
-            if (UI.input) UI.input.placeholder = "Escribe o habla...";
+            if (UI.input) UI.input.placeholder = "Escribe tu mensaje...";
         };
 
         let finalTranscript = '';
@@ -940,6 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (UI.input) UI.input.value = finalTranscript || interimTranscript;
+            adjustTextareaHeight();
 
             if (finalTranscript && STATE.isListening) {
                 if (autoSendTimer) clearTimeout(autoSendTimer);
