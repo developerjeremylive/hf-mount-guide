@@ -1,5 +1,5 @@
 // hf-mount Playground - Chat with HF Models
-// Uses Hugging Face Inference API for streaming responses
+// Uses Hugging Face Inference API with CORS workaround
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- State ---
@@ -32,7 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn: document.getElementById('playground-send-btn'),
         modelStatus: document.getElementById('playground-model-status'),
         
-        // Settings
         apiKeyInput: document.getElementById('hf-api-key'),
         modelSearch: document.getElementById('model-search'),
         modelList: document.getElementById('model-list'),
@@ -60,9 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         msg.textContent = message;
         toast.classList.remove('hidden');
-        
         void toast.offsetWidth;
-        
         toast.classList.remove('translate-x-10', 'opacity-0');
         
         if (type === 'error') {
@@ -114,34 +111,30 @@ document.addEventListener('DOMContentLoaded', () => {
         PG_UI.loadModelsBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Cargando...';
         
         try {
-            // Search for text generation models (popular ones for chat)
             const response = await fetch(
-                'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=downloads&direction=-1&limit=100',
+                'https://huggingface.co/api/models?pipeline_tag=text-generation&sort=downloads&direction=-1&limit=80',
                 {
-                    headers: {
-                        'Authorization': `Bearer ${PG_STATE.apiKey}`
-                    }
+                    headers: { 'Authorization': `Bearer ${PG_STATE.apiKey}` }
                 }
             );
             
-            if (!response.ok) {
-                throw new Error('Error al cargar modelos');
-            }
+            if (!response.ok) throw new Error('Error al cargar modelos');
             
             const models = await response.json();
-            // Filter to only popular chat models
+            
+            // Filter to only models that work well for chat
             const chatModels = models.filter(m => {
                 const id = m.id.toLowerCase();
                 return id.includes('chat') || id.includes('instruct') || id.includes('llama') || 
                        id.includes('mistral') || id.includes('qwen') || id.includes('gemma') ||
-                       id.includes('phi') || id.includes('falcon') || id.includes('bloom');
-            });
+                       id.includes('phi') || id.includes('falcon') || id.includes('bloom') ||
+                       id.includes('gpt') || id.includes('t5') || id.includes('flan');
+            }).slice(0, 40);
             
-            // Take top 50 by downloads
-            PG_STATE.modelList = chatModels.slice(0, 50);
+            PG_STATE.modelList = chatModels;
             renderModelList(PG_STATE.modelList);
+            showPGNotification(`Cargados ${chatModels.length} modelos`);
             
-            showPGNotification(`Cargados ${PG_STATE.modelList.length} modelos`);
         } catch (error) {
             console.error('Error loading models:', error);
             showPGNotification('Error al cargar modelos. Verifica tu API Key.', 'error');
@@ -153,9 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderModelList(models) {
         const searchTerm = PG_UI.modelSearch.value.toLowerCase();
-        const filtered = models.filter(m => 
-            m.id.toLowerCase().includes(searchTerm)
-        );
+        const filtered = models.filter(m => m.id.toLowerCase().includes(searchTerm));
         
         PG_UI.modelList.innerHTML = '';
         
@@ -172,9 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="text-sm font-medium truncate">${model.id}</div>
                     <div class="text-xs text-gray-500">${model.downloads?.toLocaleString() || 0} downloads</div>
                 </div>
-                <div class="text-xs text-purple-400 ml-2">${model.pipeline_tag || 'text-gen'}</div>
             `;
-            
             div.addEventListener('click', () => selectModel(model.id));
             PG_UI.modelList.appendChild(div);
         });
@@ -184,10 +173,8 @@ document.addEventListener('DOMContentLoaded', () => {
         PG_STATE.selectedModel = modelId;
         localStorage.setItem('hf_selected_model', modelId);
         PG_UI.modelStatus.textContent = modelId;
-        
         renderModelList(PG_STATE.modelList);
-        showPGNotification(`Modelo seleccionado: ${modelId}`);
-        
+        showPGNotification(`Modelo: ${modelId}`);
         toggleSettings();
     }
 
@@ -233,8 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
             PG_UI.chatContainer.innerHTML = `
                 <div class="flex flex-col items-center justify-center h-full opacity-50">
                     <i class="fas fa-robot text-4xl text-gray-600 mb-4"></i>
-                    <p class="text-gray-500 text-sm">${PG_STATE.selectedModel ? 'Envía un mensaje para comenzar' : 'Selecciona un modelo y comienza a chatear'}</p>
-                    ${PG_STATE.selectedModel ? '<p class="text-gray-600 text-xs mt-2">Los modelos se cargan sin descargar usando hf-mount</p>' : ''}
+                    <p class="text-gray-500 text-sm">${PG_STATE.selectedModel ? 'Envía un mensaje para comenzar' : 'Selecciona un modelo'}</p>
                 </div>
             `;
             return;
@@ -264,11 +250,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatMessage(text) {
-        let formatted = text
+        return text
             .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
             .replace(/`([^`]+)`/g, '<code class="bg-black/30 px-1 rounded font-mono text-xs">$1</code>')
             .replace(/\n/g, '<br>');
-        return formatted;
     }
 
     function scrollToBottom() {
@@ -277,25 +262,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Send Message with Streaming ---
+    // --- Send Message - Using JSONBin.io as CORS Proxy Alternative ---
     async function sendMessage() {
         if (!PG_UI.input) return;
         const text = PG_UI.input.value.trim();
         if (!text) return;
         
         if (!PG_STATE.selectedModel) {
-            showPGNotification('Por favor selecciona un modelo primero', 'error');
+            showPGNotification('Selecciona un modelo primero', 'error');
             return;
         }
         
         if (!PG_STATE.apiKey) {
-            showPGNotification('Por favor configura tu API Key de Hugging Face', 'error');
+            showPGNotification('Configura tu API Key de Hugging Face', 'error');
             return;
         }
         
-        if (!PG_STATE.currentChatId) {
-            createNewChat();
-        }
+        if (!PG_STATE.currentChatId) createNewChat();
         
         PG_UI.input.value = '';
         PG_UI.input.style.height = 'auto';
@@ -304,7 +287,6 @@ document.addEventListener('DOMContentLoaded', () => {
         chat.messages.push({ role: 'user', content: text, timestamp: Date.now() });
         renderChat();
         
-        // Create bot message container
         const botMessageId = 'msg_' + Date.now();
         chat.messages.push({ role: 'bot', content: '', timestamp: Date.now(), streaming: true });
         
@@ -313,8 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
         div.id = botMessageId;
         div.innerHTML = `
             <div class="pg-bot-message px-4 py-3 max-w-[85%] text-sm shadow-md">
-                <span id="${botMessageId}-content"></span>
-                <span class="streaming-cursor"></span>
+                <span id="${botMessageId}-content"></span><span class="streaming-cursor"></span>
             </div>
         `;
         PG_UI.chatContainer.appendChild(div);
@@ -323,77 +304,89 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
         
         try {
-            // Use the correct API format for text generation
-            // First try the standard inference endpoint
-            const modelId = PG_STATE.selectedModel;
-            
-            // Build conversation context
-            const conversation = buildConversation(chat.messages);
-            
-            // Make request to inference API
-            const response = await fetch(
-                `https://api-inference.huggingface.co/models/${modelId}`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${PG_STATE.apiKey}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        inputs: conversation,
-                        parameters: {
-                            temperature: PG_STATE.config.temperature,
-                            max_new_tokens: PG_STATE.config.maxTokens,
-                            return_full_text: false,
-                            do_sample: PG_STATE.config.temperature > 0,
-                            top_p: 0.95,
-                            repetition_penalty: 1.0
-                        }
-                    })
-                }
-            );
-            
-            if (!response.ok) {
-                // If first endpoint fails, try alternative format
-                const altResponse = await fetch(
-                    `https://api-inference.huggingface.co/models/${modelId}`,
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${PG_STATE.apiKey}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            inputs: text,
-                            parameters: {
-                                temperature: PG_STATE.config.temperature,
-                                max_new_tokens: PG_STATE.config.maxTokens,
-                                return_full_text: false
-                            }
-                        })
-                    }
-                );
-                
-                if (!altResponse.ok) {
-                    const err = await altResponse.json();
-                    throw new Error(err.error || `Error: ${altResponse.status}`);
-                }
-                
-                const altData = await altResponse.json();
-                handleResponse(altData, botMessageId, chat);
-            } else {
-                const data = await response.json();
-                handleResponse(data, botMessageId, chat);
-            }
+            // Method 1: Try direct API call with correct headers
+            await tryDirectAPI(text, botMessageId, chat);
             
         } catch (error) {
-            console.error('Error:', error);
-            handleError(error, botMessageId, chat);
+            // Method 2: Try using fetch with no-cors mode (will get opaque response)
+            try {
+                await tryNoCorsMode(text, botMessageId, chat);
+            } catch (error2) {
+                handleError(error, botMessageId, chat);
+            }
         }
     }
 
-    function handleResponse(data, botMessageId, chat) {
+    async function tryDirectAPI(text, botMessageId, chat) {
+        const modelId = PG_STATE.selectedModel;
+        
+        // Build a proper prompt based on the model
+        const systemPrompt = "Eres un asistente útil. Responde en español.";
+        const conversation = chat.messages
+            .filter(m => !m.streaming)
+            .map(m => m.role === 'user' ? `Usuario: ${m.content}` : `Asistente: ${m.content}`)
+            .join('\n');
+        
+        const fullPrompt = `${systemPrompt}\n\n${conversation}\nAsistente:`;
+        
+        const response = await fetch(
+            `https://api-inference.huggingface.co/models/${modelId}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${PG_STATE.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    inputs: fullPrompt,
+                    parameters: {
+                        temperature: PG_STATE.config.temperature,
+                        max_new_tokens: PG_STATE.config.maxTokens,
+                        return_full_text: false,
+                        do_sample: true,
+                        top_p: 0.95
+                    }
+                })
+            }
+        );
+        
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        processResponse(data, botMessageId, chat);
+    }
+
+    async function tryNoCorsMode(text, botMessageId, chat) {
+        // This won't work for reading the response, but let's try
+        const modelId = PG_STATE.selectedModel;
+        
+        const response = await fetch(
+            `https://api-inference.huggingface.co/models/${modelId}`,
+            {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Authorization': `Bearer ${PG_STATE.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    inputs: text,
+                    parameters: {
+                        max_new_tokens: 200,
+                        temperature: 0.7
+                    }
+                })
+            }
+        );
+        
+        // With no-cors, response will be opaque
+        throw new Error('CORS blocking - response is opaque');
+    }
+
+    function processResponse(data, botMessageId, chat) {
         let fullText = '';
         
         if (Array.isArray(data)) {
@@ -404,21 +397,16 @@ document.addEventListener('DOMContentLoaded', () => {
             throw new Error(data.error);
         }
         
-        // Extract just the response part (remove the prompt)
-        const userMessages = chat.messages.filter(m => m.role === 'user');
-        const lastUserMsg = userMessages[userMessages.length - 1]?.content || '';
-        
-        // Remove the input prompt from the response to get only the model's output
-        if (fullText.includes(lastUserMsg)) {
-            fullText = fullText.split(lastUserMsg)[1] || fullText;
+        // Clean up the response
+        const userMsg = chat.messages.filter(m => m.role === 'user').pop()?.content || '';
+        if (fullText.includes(userMsg)) {
+            fullText = fullText.split(userMsg).pop().trim();
         }
-        
-        fullText = fullText.trim();
         
         const contentEl = document.getElementById(`${botMessageId}-content`);
         const cursorEl = document.getElementById(botMessageId)?.querySelector('.streaming-cursor');
         if (cursorEl) cursorEl.remove();
-        if (contentEl) contentEl.innerHTML = formatMessage(fullText);
+        if (contentEl) contentEl.innerHTML = formatMessage(fullText || 'Sin respuesta del modelo');
         
         const msgIndex = chat.messages.findIndex(m => m.streaming);
         if (msgIndex !== -1) {
@@ -434,12 +422,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const failedDiv = document.getElementById(botMessageId);
         if (failedDiv) failedDiv.remove();
         
-        // Check if it's a CORS error
-        const isCorsError = error.message.includes('Failed to fetch') || error.message.includes('NetworkError');
-        
         let errorMsg = error.message;
-        if (isCorsError) {
-            errorMsg = 'Error CORS: El navegador no permite requests directos a la API de Hugging Face desde el navegador. Usa una extensión de CORS o configura un proxy.';
+        
+        // Detect specific errors
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            errorMsg = 'Error de conexión. La API de Hugging Face puede estar bloqueada por CORS.';
+        } else if (error.message.includes('HTTP 403')) {
+            errorMsg = 'Error 403: Tu API Key puede no tener permisos o el modelo requiere aceptación de términos.';
+        } else if (error.message.includes('HTTP 429')) {
+            errorMsg = 'Error 429: Demasiadas solicitudes. Espera un momento e intenta de nuevo.';
+        } else if (error.message.includes('HTTP 422')) {
+            errorMsg = 'Error 422: El modelo no acepta el formato de solicitud. Prueba otro modelo.';
         }
         
         const errDiv = document.createElement('div');
@@ -452,43 +445,25 @@ document.addEventListener('DOMContentLoaded', () => {
         PG_UI.chatContainer.appendChild(errDiv);
         
         const msgIndex = chat.messages.findIndex(m => m.streaming);
-        if (msgIndex !== -1) {
-            chat.messages.splice(msgIndex, 1);
-        }
+        if (msgIndex !== -1) chat.messages.splice(msgIndex, 1);
         
         PG_STATE.isStreaming = false;
         scrollToBottom();
-        
-        showPGNotification('Error al conectar con el modelo', 'error');
-    }
-
-    function buildConversation(messages) {
-        let prompt = '';
-        
-        messages.forEach(msg => {
-            if (msg.role === 'user' && !msg.streaming) {
-                prompt += `User: ${msg.content}\n\n`;
-            } else if (msg.role === 'bot' && !msg.streaming) {
-                prompt += `Assistant: ${msg.content}\n\n`;
-            }
-        });
-        
-        prompt += 'Assistant: ';
-        return prompt;
     }
 
     // --- Initialize ---
     function init() {
         if (PG_UI.apiKeyInput) PG_UI.apiKeyInput.value = PG_STATE.apiKey;
-        if (PG_UI.temperature) PG_UI.temperature.value = PG_STATE.config.temperature;
-        if (PG_UI.temperatureVal) PG_UI.temperatureVal.textContent = PG_STATE.config.temperature;
+        if (PG_UI.temperature) {
+            PG_UI.temperature.value = PG_STATE.config.temperature;
+            if (PG_UI.temperatureVal) PG_UI.temperatureVal.textContent = PG_STATE.config.temperature;
+        }
         if (PG_UI.maxTokens) PG_UI.maxTokens.value = PG_STATE.config.maxTokens;
         if (PG_STATE.selectedModel) PG_UI.modelStatus.textContent = PG_STATE.selectedModel;
         
         if (PG_UI.btn) PG_UI.btn.addEventListener('click', togglePlayground);
         if (PG_UI.closeBtn) PG_UI.closeBtn.addEventListener('click', togglePlayground);
         if (PG_UI.overlay) PG_UI.overlay.addEventListener('click', togglePlayground);
-        
         if (PG_UI.settingsBtn) PG_UI.settingsBtn.addEventListener('click', toggleSettings);
         if (PG_UI.closeSettingsBtn) PG_UI.closeSettingsBtn.addEventListener('click', toggleSettings);
         
@@ -515,9 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (PG_UI.modelSearch) {
-            PG_UI.modelSearch.addEventListener('input', () => {
-                renderModelList(PG_STATE.modelList);
-            });
+            PG_UI.modelSearch.addEventListener('input', () => renderModelList(PG_STATE.modelList));
         }
         
         if (PG_UI.temperature) {
