@@ -1,6 +1,6 @@
 /**
  * hf-mount Guide - Cloudflare Worker Proxy
- * Debug version - try all HF endpoints
+ * Try HF Spaces Inference Endpoints
  */
 
 export default {
@@ -20,27 +20,24 @@ export default {
     let modelId = url.pathname.replace(/^\//, '');
     
     if (!modelId || modelId === 'favicon.ico') {
-      return new Response(JSON.stringify({ 
-        status: 'alive',
-        message: 'hf-mount worker running'
-      }), { 
+      return new Response(JSON.stringify({ status: 'alive' }), { 
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Get API key - keep full Bearer format
+    // Get API key
     const authHeader = request.headers.get('Authorization');
     let apiKey = authHeader || (env.HF_TOKEN ? `Bearer ${env.HF_TOKEN}` : '');
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'No API key provided' }), {
+      return new Response(JSON.stringify({ error: 'No API key' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Parse request body
+    // Get request body
     const requestBody = await request.text();
     let bodyObj = {};
     try {
@@ -51,60 +48,48 @@ export default {
     
     const inputs = bodyObj.inputs || bodyObj.prompt || 'Hello';
     
-    // Try multiple HF endpoints
-    const endpoints = [
-      `https://router.huggingface.co/models/${modelId}`,
-      `https://api-inference.huggingface.co/models/${modelId}`,
-      `https://${modelId.replace('/', '-')}.safetensors-infer.hf.space/api/infer`,
-    ];
+    // Try the new HF Inference API format
+    // According to HF docs, the new format is to use the /tasks/endpoint
+    // Let's try the chat/completion format
     
-    let lastResponse = null;
-    let lastError = null;
+    const hfUrl = 'https://api.openai.com/v1/chat/completions';
     
-    for (const endpoint of endpoints) {
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': apiKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            inputs: inputs,
-            parameters: {
-              max_new_tokens: 50,
-              temperature: 0.7
-            }
-          })
-        });
-
-        const responseText = await response.text();
-        
-        // If we get something other than "Not Found" or "Model not found", use it
-        if (response.status !== 404 && !responseText.includes('Not Found')) {
-          return new Response(responseText, {
-            status: response.status,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
-        
-        lastResponse = { status: response.status, body: responseText.substring(0, 200) };
-      } catch (e) {
-        lastError = e.message;
+    // Actually, for HF models let's use the correct endpoint
+    // The new HF Inference API uses this format:
+    const hfEndpoint = `https://router.huggingface.co/${modelId}`;
+    
+    const hfBody = {
+      inputs: inputs,
+      parameters: {
+        max_new_tokens: bodyObj.parameters?.max_new_tokens || 50,
+        temperature: bodyObj.parameters?.temperature || 0.7,
+        top_p: 0.95,
+        do_sample: true
       }
+    };
+
+    try {
+      const hfResponse = await fetch(hfEndpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(hfBody)
+      });
+
+      const responseText = await hfResponse.text();
+      
+      return new Response(responseText, {
+        status: hfResponse.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+      
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
-    
-    // All endpoints failed - return debug info
-    return new Response(JSON.stringify({
-      error: 'Model not found or access denied',
-      model: modelId,
-      triedEndpoints: endpoints,
-      lastResponse: lastResponse,
-      lastError: lastError,
-      hint: 'Make sure: 1) Model name is correct 2) You have access to the model on HF 3) Your API key is valid'
-    }), {
-      status: 404,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
   }
 };
