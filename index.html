@@ -39,18 +39,21 @@
             --user-msg-bg: linear-gradient(135deg, #f59e0b, #ea580c);
         }
         
-        #voice-agent-overlay {
+        #voice-agent-overlay, #playground-overlay {
             backdrop-filter: blur(8px);
             background: rgba(0, 0, 0, 0.7);
         }
         
-        #voice-agent-panel {
+        /* Playground Panel */
+        #playground-panel {
             box-shadow: -20px 0 60px rgba(0, 0, 0, 0.6);
             background: var(--bg-primary) !important;
+            width: 100%;
+            max-width: 900px;
         }
         
         /* Settings Modal - Full opaque background */
-        #voice-settings-modal {
+        #voice-settings-modal, #playground-settings-modal {
             background: var(--bg-primary) !important;
             backdrop-filter: none;
         }
@@ -120,7 +123,7 @@
         }
         
         /* Chat Input - Auto-expanding */
-        #chat-input {
+        #chat-input, #playground-chat-input {
             background: var(--bg-secondary) !important;
             border: 1px solid var(--border-color) !important;
             color: var(--text-primary) !important;
@@ -130,11 +133,11 @@
             overflow-y: auto;
         }
         
-        #chat-input::placeholder {
+        #chat-input::placeholder, #playground-chat-input::placeholder {
             color: var(--text-muted) !important;
         }
         
-        #chat-input:focus {
+        #chat-input:focus, #playground-chat-input:focus {
             border-color: var(--accent-amber) !important;
             outline: none;
         }
@@ -167,6 +170,11 @@
             75%, 100% { transform: scale(2); opacity: 0; }
         }
         
+        @keyframes cursor-blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
         .animate-fade-in {
             animation: fadeIn 0.3s ease-out;
         }
@@ -175,21 +183,25 @@
             animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
         
+        .cursor-blink {
+            animation: cursor-blink 1s infinite;
+        }
+        
         /* Message bubbles */
-        .user-message {
+        .user-message, .pg-user-message {
             background: var(--user-msg-bg);
             color: #000;
             border-radius: 18px 18px 4px 18px;
         }
         
-        .bot-message {
+        .bot-message, .pg-bot-message {
             background: var(--bg-secondary);
             color: var(--text-primary);
             border-radius: 18px 18px 18px 4px;
             border: 1px solid var(--border-color);
         }
         
-        .system-message {
+        .system-message, .pg-system-message {
             background: rgba(239, 68, 68, 0.15);
             color: #fca5a5;
             border-radius: 12px;
@@ -228,6 +240,39 @@
             background: var(--bg-secondary) !important;
             border: 1px solid var(--border-color) !important;
             color: var(--text-primary) !important;
+        }
+        
+        /* Model List */
+        .model-item {
+            transition: all 0.2s;
+        }
+        
+        .model-item:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        .model-item.selected {
+            background: var(--accent-amber);
+            color: #000;
+        }
+        
+        /* Streaming indicator */
+        .streaming-cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: var(--accent-amber);
+            animation: cursor-blink 0.8s infinite;
+            vertical-align: middle;
+            margin-left: 2px;
+        }
+        
+        /* Playground Button */
+        .playground-btn {
+            position: fixed;
+            bottom: 6rem;
+            right: 1.5rem;
+            z-40;
         }
     </style>
 </head>
@@ -716,13 +761,18 @@ volumes:
     <!-- Overlay -->
     <div id="voice-agent-overlay" class="fixed inset-0 z-[55] hidden transition-opacity duration-300"></div>
     
-    <!-- Floating Button -->
+    <!-- Floating Button - Voice Agent -->
     <button id="voice-agent-btn" class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-amber-500 to-orange-500 text-black w-14 h-14 rounded-full shadow-lg shadow-amber-500/30 flex items-center justify-center hover:scale-110 transition-transform duration-300 group">
         <i class="fas fa-microphone text-lg"></i>
         <div class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping-slow hidden" id="voice-listening-indicator"></div>
     </button>
     
-    <!-- Panel -->
+    <!-- Floating Button - Playground -->
+    <button id="playground-btn" class="fixed bottom-6 right-24 z-50 bg-gradient-to-r from-purple-500 to-indigo-500 text-white w-14 h-14 rounded-full shadow-lg shadow-purple-500/30 flex items-center justify-center hover:scale-110 transition-transform duration-300 group">
+        <i class="fas fa-robot text-lg"></i>
+    </button>
+
+    <!-- Voice Agent Panel -->
     <div id="voice-agent-panel" class="fixed inset-y-0 right-0 w-full sm:w-[420px] bg-[#0f0f12] transform translate-x-full transition-transform duration-300 z-[60] shadow-2xl flex flex-col overflow-hidden border-l border-[#3a3a42]">
         <!-- Header -->
         <div class="panel-header px-4 py-3 flex items-center justify-between">
@@ -749,7 +799,7 @@ volumes:
             <span class="text-[10px] text-amber-400 font-mono truncate" id="current-voice-name">Google Español</span>
         </div>
         
-        <!-- Settings Modal - Full opaque background -->
+        <!-- Settings Modal -->
         <div id="voice-settings-modal" class="absolute inset-x-0 top-[73px] bottom-0 bg-[#0f0f12] z-30 p-6 hidden flex-col border-t border-[#3a3a42] animate-fade-in overflow-y-auto">
             <div class="flex justify-between items-center mb-6">
                 <h4 class="text-white font-semibold">Configuración</h4>
@@ -758,13 +808,11 @@ volumes:
                 </button>
             </div>
             
-            <!-- API Key -->
             <div class="mb-4">
                 <label class="settings-label">Gemini API Key</label>
                 <input type="password" id="api-key-input" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="sk-...">
             </div>
             
-            <!-- Model Select -->
             <div class="mb-4">
                 <label class="settings-label">Modelo</label>
                 <div class="flex gap-2">
@@ -777,13 +825,11 @@ volumes:
                 </div>
             </div>
             
-            <!-- Custom Model Input -->
             <div class="mb-4 hidden" id="custom-model-container">
                 <label class="settings-label">Custom Model ID</label>
                 <input type="text" id="custom-model-input" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="gemini-3-flash-preview">
             </div>
             
-            <!-- Toggles -->
             <div class="space-y-4 mb-6">
                 <label class="flex items-center justify-between">
                     <span class="text-gray-400 text-sm">Thinking Mode</span>
@@ -795,7 +841,6 @@ volumes:
                 </label>
             </div>
             
-            <!-- Language -->
             <div class="mb-4">
                 <label class="settings-label">Idioma de voz</label>
                 <select id="voice-lang-select" class="dark-select w-full rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
@@ -804,7 +849,6 @@ volumes:
                 </select>
             </div>
             
-            <!-- Voice Select -->
             <div class="mb-6">
                 <label class="settings-label">Voz</label>
                 <select id="voice-select" class="dark-select w-full rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
@@ -812,16 +856,13 @@ volumes:
                 </select>
             </div>
             
-            <!-- Clear History -->
             <button id="clear-history-btn" class="w-full py-3 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors text-sm border border-red-500/30">
                 <i class="fas fa-trash-alt mr-2"></i>Borrar historial
             </button>
         </div>
         
         <!-- Chat Messages -->
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0f0f12]">
-            <!-- Messages will be injected here -->
-        </div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0f0f12]"></div>
         
         <!-- Player Controls -->
         <div id="audio-player-controls" class="hidden px-4 py-3 border-t border-[#3a3a42] bg-[#232329] flex items-center justify-between">
@@ -851,6 +892,92 @@ volumes:
             </div>
         </div>
     </div>
+
+    <!-- Playground Panel -->
+    <div id="playground-overlay" class="fixed inset-0 z-[55] hidden transition-opacity duration-300 flex items-center justify-center p-4"></div>
+    
+    <div id="playground-panel" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl max-h-[90vh] bg-[#0f0f12] rounded-2xl border border-[#3a3a42] shadow-2xl transform translate-y-full transition-transform duration-300 z-[60] overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div class="panel-header px-4 py-3 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-3">
+                <i class="fas fa-robot text-purple-400 text-xl"></i>
+                <div>
+                    <h3 class="text-white font-semibold text-sm">hf-mount Playground</h3>
+                    <p class="text-purple-400 text-[10px] font-mono" id="playground-model-status">Selecciona un modelo</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1">
+                <button id="playground-settings-btn" class="text-gray-400 hover:text-purple-400 p-2 transition-colors" title="Configuración">
+                    <i class="fas fa-cog text-sm"></i>
+                </button>
+                <button id="playground-close-btn" class="text-gray-400 hover:text-red-400 p-2 transition-colors" title="Cerrar">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Settings Panel -->
+        <div id="playground-settings-modal" class="absolute inset-x-0 top-[52px] bottom-0 bg-[#0f0f12] z-20 p-4 hidden flex-col border-t border-[#3a3a42] animate-fade-in overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h4 class="text-white font-semibold">Configuración</h4>
+                <button id="close-playground-settings-btn" class="text-gray-400 hover:text-red-400">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="mb-4">
+                <label class="settings-label">Hugging Face API Key</label>
+                <input type="password" id="hf-api-key" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="hf_...">
+            </div>
+            
+            <div class="mb-4">
+                <label class="settings-label">Buscar modelo</label>
+                <input type="text" id="model-search" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="gpt2, llama, mistral...">
+            </div>
+            
+            <div class="mb-4">
+                <label class="settings-label">Modelos de Generación de Texto</label>
+                <div id="model-list" class="h-48 overflow-y-auto border border-[#3a3a42] rounded-lg p-2 space-y-1">
+                    <div class="text-gray-500 text-sm p-2">Cargando modelos...</div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="settings-label">Temperature</label>
+                    <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" class="w-full accent-purple-500">
+                    <span class="text-xs text-gray-500" id="temperature-val">0.7</span>
+                </div>
+                <div>
+                    <label class="settings-label">Max Tokens</label>
+                    <input type="number" id="max-tokens" class="dark-input w-full rounded-lg px-3 py-2 text-sm" value="512" min="1" max="4096">
+                </div>
+            </div>
+            
+            <button id="load-models-btn" class="w-full py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-semibold">
+                <i class="fas fa-sync-alt mr-2"></i>Actualizar Modelos
+            </button>
+        </div>
+        
+        <!-- Chat Area -->
+        <div id="playground-chat" class="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0f0f12]">
+            <div class="flex flex-col items-center justify-center h-full opacity-50">
+                <i class="fas fa-robot text-4xl text-gray-600 mb-4"></i>
+                <p class="text-gray-500 text-sm">Selecciona un modelo y comienza a chatear</p>
+                <p class="text-gray-600 text-xs mt-2">Los modelos se cargan sin descargar usando hf-mount</p>
+            </div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="input-area p-4 flex-shrink-0">
+            <div class="flex items-end gap-2">
+                <textarea id="playground-chat-input" class="flex-1 rounded-xl px-4 py-3 text-sm resize-none" rows="1" placeholder="Escribe tu mensaje..."></textarea>
+                <button id="playground-send-btn" class="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white hover:shadow-lg hover:shadow-purple-500/20 transition-all flex-shrink-0">
+                    <i class="fas fa-paper-plane text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </div>
     
     <!-- Confirm Modal -->
     <div id="confirm-modal" class="hidden fixed inset-0 bg-black/70 z-[70] items-center justify-center backdrop-blur-sm">
@@ -873,5 +1000,6 @@ volumes:
 
     <script src="js/main.js"></script>
     <script src="js/voice-agent.js"></script>
+    <script src="js/playground.js"></script>
 </body>
 </html>
