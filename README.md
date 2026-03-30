@@ -1,52 +1,99 @@
-# hf-mount Guide 🌐
+# hf-mount Guide - Solución Completa
 
-> Monta repositorios y buckets de Hugging Face como sistemas de archivos locales sin descargar nada.
+## ¿Qué es hf-mount?
 
-## 📄 Landing Page
+**hf-mount** monta repositorios de Hugging Face como sistemas de archivos locales. Los archivos se leen **bajo demanda** - no se descarga todo el modelo, solo lo que necesitas.
 
-El sitio web está disponible en: **Visitar [hf-mount-guide](https://developerjeremylive.github.io/hf-mount-guide/)**
+## Instalación
 
-*(Para habilitar GitHub Pages: Settings > Pages > Source: main branch)*
+### Linux/macOS
+```bash
+curl -fsSL https://raw.githubusercontent.com/huggingface/hf-mount/main/install.sh | sh
+```
 
-## 📚 Guía de Uso Completa
+### Verificar instalación
+```bash
+hf-mount --version
+```
 
-La guía detallada de hf-mount y hf-csi-driver está disponible en la wiki del repositorio o en la documentación oficial:
+## Uso Básico
 
-- [hf-mount README](https://github.com/huggingface/hf-mount#readme)
-- [hf-csi-driver README](https://github.com/huggingface/hf-csi-driver#readme)
+### 1. Montar un modelo público
+```bash
+hf-mount start repo openai-community/gpt2 /tmp/gpt2
+```
 
-## 🚀 Quick Start
+### 2. Montar un modelo privado
+```bash
+export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxx"
+hf-mount start --hf-token $HF_TOKEN repo tu-usuario/tu-modelo-privado /tmp/modelo
+```
+
+### 3. Listar mounts activos
+```bash
+hf-mount status
+```
+
+### 4. Desmontar
+```bash
+hf-mount stop /tmp/gpt2
+```
+
+## Usar con Python/Transformers
+
+Una vez montado, usa transformers normalmente:
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Carga desde el path montado - NO descarga nada
+model = AutoModelForCausalLM.from_pretrained("/tmp/gpt2")
+tokenizer = AutoTokenizer.from_pretrained("/tmp/gpt2")
+
+# Usa normalmente
+inputs = tokenizer("Hello, my name is", return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=20)
+print(tokenizer.decode(outputs[0]))
+```
+
+## API Server Local
+
+Para usar desde el navegador, iniciá el servidor:
 
 ```bash
-# Instalación
-curl -fsSL https://raw.githubusercontent.com/huggingface/hf-mount/main/install.sh | sh
-
-# Montar un modelo público
-hf-mount start repo openai/gpt-oss-20b /tmp/model
-
-# Acceder como si estuviera localmente
-ls /tmp/model
-python -c "from transformers import AutoModel; model = AutoModel.from_pretrained('/tmp/model')"
+cd hf-mount-guide
+pip install flask transformers
+python api_server.py
 ```
 
-## 📂 Estructura del Proyecto
+Luego abrí http://localhost:5000
 
+## Modelos Recomendados para Prueba
+
+| Modelo | Tamaño | Comando mount |
+|--------|--------|----------------|
+| gpt2 | ~500MB | `hf-mount start repo openai-community/gpt2 /tmp/gpt2` |
+| TinyLlama | ~1GB | `hf-mount start repo TinyLlama/TinyLlama-1.1B-Chat-v1.0 /tmp/tinyllama` |
+| Qwen | ~4GB | `hf-mount start repo Qwen/Qwen2.5-0.5B-Instruct /tmp/qwen` |
+
+## Solución de Problemas
+
+### "Permission denied"
+```bash
+# Necesitás tu HF_TOKEN para repos privados
+export HF_TOKEN="hf_xxxx"
 ```
-hf-mount-guide/
-├── index.html      # Landing page
-├── css/
-│   └── style.css   # Estilos personalizados
-├── js/
-│   └── main.js     # Three.js y animaciones
-└── README.md       # Este archivo
+
+### "fuse: permission denied"
+```bash
+# En Linux, agrega tu usuario al grupo fuse
+sudo usermod -a -G fuse $USER
+# O reinicia sesión
 ```
 
-## 🎨 Tecnologías
-
-- **Tailwind CSS** - Estilos
-- **Three.js** - Animación 3D del background
-- **Google Fonts** - Instrument Sans + Space Mono
-
-## 📝 License
-
-Apache-2.0 - Por Hugging Face
+### "mount: command not found"
+```bash
+# Instala fuse
+# Ubuntu/Debian: sudo apt-get install fuse3
+# macOS: brew install macfuse
+```
