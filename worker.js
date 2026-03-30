@@ -1,6 +1,6 @@
 /**
  * hf-mount Guide - Cloudflare Worker Proxy
- * Simple debug version
+ * Using HF Router API with correct format
  */
 
 export default {
@@ -23,27 +23,19 @@ export default {
       return new Response('OK', { status: 200 });
     }
 
-    // Get API key - from header only for now
+    // Get API key from Authorization header
     const authHeader = request.headers.get('Authorization');
     let apiKey = '';
     
     if (authHeader) {
-      // Extract the key after "Bearer "
-      const parts = authHeader.split('Bearer ');
-      apiKey = parts.length > 1 ? parts[1].trim() : authHeader;
-    }
-    
-    // If no header, try environment
-    if (!apiKey && env.HF_TOKEN) {
-      apiKey = env.HF_TOKEN;
+      // Keep full Bearer format
+      apiKey = authHeader;
+    } else if (env.HF_TOKEN) {
+      apiKey = `Bearer ${env.HF_TOKEN}`;
     }
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ 
-        error: 'No API key provided',
-        hasAuthHeader: !!authHeader,
-        hasEnvKey: !!env.HF_TOKEN
-      }), {
+      return new Response(JSON.stringify({ error: 'No API key' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -58,12 +50,21 @@ export default {
       bodyObj = {};
     }
     
-    const inputs = bodyObj.inputs || 'Hello';
+    const inputs = bodyObj.inputs || bodyObj.input || 'Hello';
     
-    // Make request to HF Inference API directly (not router)
-    // Using the official inference endpoint
-    const hfUrl = `https://api-inference.huggingface.co/models/${modelId}`;
+    // Use HF Router API - correct endpoint
+    // The router API uses /models/{model} format
+    const hfUrl = `https://router.huggingface.co/${modelId}`;
     
+    const hfBody = {
+      inputs: inputs,
+      parameters: {
+        max_new_tokens: 50,
+        temperature: 0.7,
+        return_full_text: false
+      }
+    };
+
     try {
       const hfResponse = await fetch(hfUrl, {
         method: 'POST',
@@ -71,13 +72,7 @@ export default {
           'Authorization': apiKey,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          inputs: inputs,
-          parameters: {
-            max_new_tokens: 50,
-            temperature: 0.7
-          }
-        })
+        body: JSON.stringify(hfBody)
       });
 
       const responseText = await hfResponse.text();
@@ -88,20 +83,10 @@ export default {
       });
       
     } catch (error) {
-      return new Response(JSON.stringify({ 
-        error: error.message,
-        hfUrl: hfUrl
-      }), {
+      return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
   }
 };
-
-/*
- * This version:
- * 1. Uses api-inference.huggingface.co directly
- * 2. Passes Authorization header as-is (without Bearer)
- * 3. Has debug output
- */
