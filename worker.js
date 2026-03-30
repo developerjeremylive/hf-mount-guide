@@ -52,9 +52,9 @@ export default {
     
     const inputs = bodyObj.inputs || bodyObj.input || 'Hello';
     
-    // Use HF Router API - correct endpoint
-    // The router API uses /models/{model} format
-    const hfUrl = `https://router.huggingface.co/${modelId}`;
+    // Use HF Router API - CORRECT FORMAT with /models/ prefix
+    // https://router.huggingface.co/models/{model_id}
+    const hfUrl = `https://router.huggingface.co/models/${modelId}`;
     
     const hfBody = {
       inputs: inputs,
