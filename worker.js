@@ -25,7 +25,7 @@ export default {
       return new Response('Not Found', { status: 404 });
     }
 
-    // Get model ID from path (remove leading slash)
+    // Get model ID from path
     let modelId = url.pathname.replace(/^\//, '').replace(/^models\//, '');
     
     if (!modelId) {
@@ -43,12 +43,12 @@ export default {
     const authHeader = request.headers.get('Authorization');
     let apiKey = authHeader ? authHeader.replace('Bearer ', '') : env.HF_TOKEN;
     
-    // Clean up - ensure it has hf_ prefix
+    // Add hf_ prefix if missing
     if (apiKey && !apiKey.startsWith('hf_')) {
       apiKey = 'hf_' + apiKey;
     }
     
-    // Also check query param
+    // Check query param too
     const queryKey = url.searchParams.get('key');
     if (queryKey) {
       apiKey = queryKey.startsWith('hf_') ? queryKey : 'hf_' + queryKey;
@@ -78,8 +78,7 @@ export default {
       // Ensure inputs exists
       const inputs = bodyObj.inputs || bodyObj.input || bodyObj.prompt || '';
       
-      // Build HF request - use the Inference API format
-      // Try router.huggingface.co first
+      // Build HF request URL
       const hfUrl = `https://router.huggingface.co/models/${modelId}`;
       
       const hfBody = {
@@ -92,11 +91,11 @@ export default {
         }
       };
 
-      // Make request to HF
+      // Make request to HF with Bearer prefix
       const hfResponse = await fetch(hfUrl, {
         method: 'POST',
         headers: {
-          'Authorization': apiKey,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
@@ -136,9 +135,4 @@ export default {
  * CONFIGURATION:
  * 1. Set HF_TOKEN secret in Cloudflare Worker settings
  * 2. Deploy and use
- * 
- * Usage:
- * curl -X POST https://your-worker.workers.dev/gpt2 \
- *   -H "Authorization: Bearer hf_yourkey" \
- *   -d '{"inputs": "Hello"}'
  */
