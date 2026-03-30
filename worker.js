@@ -41,24 +41,26 @@ export default {
 
     // Get API key from header or env
     const authHeader = request.headers.get('Authorization');
-    let apiKey = authHeader ? authHeader.replace('Bearer ', '').replace('hf_', '') : env.HF_TOKEN;
+    let apiKey = authHeader ? authHeader.replace('Bearer ', '') : env.HF_TOKEN;
+    
+    // Clean up - ensure it has hf_ prefix
+    if (apiKey && !apiKey.startsWith('hf_')) {
+      apiKey = 'hf_' + apiKey;
+    }
     
     // Also check query param
     const queryKey = url.searchParams.get('key');
-    if (queryKey) apiKey = queryKey;
+    if (queryKey) {
+      apiKey = queryKey.startsWith('hf_') ? queryKey : 'hf_' + queryKey;
+    }
     
-    if (!apiKey) {
+    if (!apiKey || apiKey === 'hf_') {
       return new Response(JSON.stringify({ 
         error: 'API Key requerida. Configura HF_TOKEN como secret o pasa ?key=tu_api_key' 
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
-    }
-
-    // Ensure apiKey has hf_ prefix if missing
-    if (!apiKey.startsWith('hf_')) {
-      apiKey = 'hf_' + apiKey;
     }
 
     try {
