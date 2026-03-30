@@ -3,1034 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>hf-mount Guide | Monta Hugging Face como sistema de archivos local</title>
-    <meta name="description" content="Guía completa de hf-mount y hf-csi-driver. Monta repositorios y buckets de Hugging Face como sistemas de archivos locales sin descargar nada.">
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-    
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <!-- Custom Styles -->
-    <link rel="stylesheet" href="css/style.css">
-    
+    <title>🤗 hf-mount Guide</title>
     <style>
-        /* Voice Agent Panel Styles - Anthropic Claude Style */
-        :root {
-            --bg-primary: #0f0f12;
-            --bg-secondary: #1a1a1f;
-            --bg-tertiary: #232329;
-            --bg-input: #0d0d0f;
-            --border-color: #3a3a42;
-            --accent-amber: #f59e0b;
-            --accent-orange: #ea580c;
-            --text-primary: #fafafa;
-            --text-secondary: #a1a1aa;
-            --text-muted: #71717a;
-            --user-msg-bg: linear-gradient(135deg, #f59e0b, #ea580c);
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .hero {
+            text-align: center;
+            padding: 60px 0;
+        }
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #e94560, #ff6b9d);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero .subtitle {
+            font-size: 1.3rem;
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+        .card h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+        }
+        .card p { line-height: 1.7; color: #ccc; }
+        
+        code {
+            background: #0f3460;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
         }
         
-        #voice-agent-overlay, #playground-overlay {
-            backdrop-filter: blur(8px);
-            background: rgba(0, 0, 0, 0.7);
+        pre {
+            background: #0a0a1a;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            margin: 15px 0;
         }
         
-        /* Playground Panel - Full Screen */
-        #playground-panel {
-            box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
-            background: var(--bg-primary) !important;
-            width: 100%;
-            max-width: 100vw;
-            height: 100vh;
-            max-height: 100vh;
-            border-radius: 0;
-            top: 0;
-            left: 0;
-            transform: translateY(0);
-            transform: translateX(0);
+        pre code {
+            background: none;
+            padding: 0;
         }
         
-        #playground-panel.translate-y-full {
-            transform: translateY(100%);
+        .steps {
+            counter-reset: step;
         }
-        
-        /* Full screen chat area */
-        #playground-chat {
-            height: calc(100vh - 140px);
-            max-height: calc(100vh - 140px);
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
         }
-        
-        /* Model list in settings - larger */
-        #model-list {
-            height: 300px;
-        }
-        
-        /* Settings Modal - Full opaque background */
-        #voice-settings-modal, #playground-settings-modal {
-            background: var(--bg-primary) !important;
-            backdrop-filter: none;
-        }
-        
-        /* Input Styles - Dark with light text */
-        .dark-input {
-            background: var(--bg-input) !important;
-            border: 1px solid var(--border-color) !important;
-            color: var(--text-primary) !important;
-        }
-        
-        .dark-input::placeholder {
-            color: var(--text-muted) !important;
-        }
-        
-        .dark-input:focus {
-            border-color: var(--accent-amber) !important;
-            outline: none;
-        }
-        
-        /* Select Styles */
-        .dark-select {
-            background: var(--bg-input) !important;
-            border: 1px solid var(--border-color) !important;
-            color: var(--text-primary) !important;
-        }
-        
-        .dark-select option {
-            background: var(--bg-secondary) !important;
-            color: var(--text-primary) !important;
-            padding: 8px;
-        }
-        
-        /* Toggle Switch */
-        .toggle-input {
-            appearance: none;
-            width: 44px;
-            height: 24px;
-            background: var(--bg-tertiary);
-            border-radius: 12px;
-            position: relative;
-            cursor: pointer;
-            border: 1px solid var(--border-color);
-            transition: all 0.3s;
-        }
-        
-        .toggle-input::before {
-            content: '';
-            position: absolute;
-            width: 18px;
-            height: 18px;
-            background: var(--text-secondary);
+        .step-num {
+            background: #e94560;
+            color: white;
+            width: 30px;
+            height: 30px;
             border-radius: 50%;
-            top: 2px;
-            left: 2px;
-            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        .step-content h3 {
+            margin-bottom: 5px;
+            color: #fff;
+        }
+        .step-content p { color: #aaa; font-size: 0.95rem; }
+        
+        .warning {
+            background: rgba(255,193,7,0.1);
+            border: 1px solid rgba(255,193,7,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .warning::before {
+            content: "⚠️ ";
         }
         
-        .toggle-input:checked {
-            background: var(--accent-amber);
-            border-color: var(--accent-amber);
+        .model-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
         }
-        
-        .toggle-input:checked::before {
-            transform: translateX(20px);
-            background: #000;
-        }
-        
-        /* Chat Input - Auto-expanding */
-        #chat-input, #playground-chat-input {
-            background: var(--bg-secondary) !important;
-            border: 1px solid var(--border-color) !important;
-            color: var(--text-primary) !important;
-            min-height: 48px;
-            max-height: 200px;
-            resize: none;
-            overflow-y: auto;
-        }
-        
-        #chat-input::placeholder, #playground-chat-input::placeholder {
-            color: var(--text-muted) !important;
-        }
-        
-        #chat-input:focus, #playground-chat-input:focus {
-            border-color: var(--accent-amber) !important;
-            outline: none;
-        }
-        
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 3px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
-        }
-        
-        /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes ping-slow {
-            75%, 100% { transform: scale(2); opacity: 0; }
-        }
-        
-        @keyframes cursor-blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-        }
-        
-        .animate-fade-in {
-            animation: fadeIn 0.3s ease-out;
-        }
-        
-        .animate-ping-slow {
-            animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-        }
-        
-        .cursor-blink {
-            animation: cursor-blink 1s infinite;
-        }
-        
-        /* Message bubbles */
-        .user-message, .pg-user-message {
-            background: var(--user-msg-bg);
-            color: #000;
-            border-radius: 18px 18px 4px 18px;
-        }
-        
-        .bot-message, .pg-bot-message {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            border-radius: 18px 18px 18px 4px;
-            border: 1px solid var(--border-color);
-        }
-        
-        .system-message, .pg-system-message {
-            background: rgba(239, 68, 68, 0.15);
-            color: #fca5a5;
-            border-radius: 12px;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-        
-        /* Panel Header */
-        .panel-header {
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        /* Input Area */
-        .input-area {
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-        }
-        
-        /* Settings Section Labels */
-        .settings-label {
-            color: var(--text-secondary);
-            font-size: 12px;
-            font-weight: 500;
-            margin-bottom: 6px;
-            display: block;
-        }
-        
-        /* Player Controls */
-        #audio-player-controls {
-            background: var(--bg-tertiary);
-            border-color: var(--border-color);
-        }
-        
-        /* Toast */
-        .toast-notification {
-            background: var(--bg-secondary) !important;
-            border: 1px solid var(--border-color) !important;
-            color: var(--text-primary) !important;
-        }
-        
-        /* Model List */
         .model-item {
-            transition: all 0.2s;
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
         }
+        .model-item .name { color: #e94560; font-weight: bold; }
+        .model-item .size { color: #888; font-size: 0.85rem; }
         
-        .model-item:hover {
-            background: var(--bg-tertiary);
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 0.9rem;
         }
-        
-        .model-item.selected {
-            background: var(--accent-amber);
-            color: #000;
-        }
-        
-        /* Streaming indicator */
-        .streaming-cursor {
-            display: inline-block;
-            width: 8px;
-            height: 16px;
-            background: var(--accent-amber);
-            animation: cursor-blink 0.8s infinite;
-            vertical-align: middle;
-            margin-left: 2px;
-        }
-        
-        /* Playground Button */
-        .playground-btn {
-            position: fixed;
-            bottom: 6rem;
-            right: 1.5rem;
-            z-40;
-        }
+        .footer a { color: #e94560; }
     </style>
 </head>
-<body class="bg-dark antialiased">
-    <!-- Canvas Background -->
-    <canvas id="canvas3d" class="fixed inset-0 z-0"></canvas>
-    
-    <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 px-6 py-4 bg-transparent transition-all duration-300">
-        <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <a href="#" class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                </div>
-                <span class="text-white font-semibold text-lg">hf-mount</span>
-            </a>
-            
-            <div class="hidden md:flex items-center gap-8">
-                <a href="#que-es" class="text-gray-400 hover:text-white transition-colors">Qué es</a>
-                <a href="#caracteristicas" class="text-gray-400 hover:text-white transition-colors">Características</a>
-                <a href="#instalacion" class="text-gray-400 hover:text-white transition-colors">Instalación</a>
-                <a href="#ejemplos" class="text-gray-400 hover:text-white transition-colors">Ejemplos</a>
-                <a href="#casos" class="text-gray-400 hover:text-white transition-colors">Casos de uso</a>
-                <a href="https://github.com/huggingface/hf-mount" target="_blank" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all">
-                    GitHub →
-                </a>
-            </div>
-            
-            <button id="menuBtn" class="md:hidden text-white p-2">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
-            </button>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>🤗 hf-mount Guide</h1>
+            <p class="subtitle">Carga modelos de HuggingFace sin descargarlos</p>
         </div>
         
-        <!-- Mobile Menu -->
-        <div id="mobileMenu" class="hidden md:hidden absolute top-full left-0 right-0 bg-dark-900/95 backdrop-blur-lg border-t border-white/10">
-            <div class="px-6 py-4 flex flex-col gap-4">
-                <a href="#que-es" class="text-gray-400 hover:text-white py-2">Qué es</a>
-                <a href="#caracteristicas" class="text-gray-400 hover:text-white py-2">Características</a>
-                <a href="#instalacion" class="text-gray-400 hover:text-white py-2">Instalación</a>
-                <a href="#ejemplos" class="text-gray-400 hover:text-white py-2">Ejemplos</a>
-                <a href="#casos" class="text-gray-400 hover:text-white py-2">Casos de uso</a>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="relative min-h-screen flex items-center justify-center px-6 pt-20">
-        <div class="max-w-5xl mx-auto text-center z-10">
-            <div class="inline-flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full border border-white/10 mb-8">
-                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                <span class="text-gray-400 text-sm">Open Source • FUSE & NFS Support</span>
-            </div>
-            
-            <h1 class="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-                Monta Hugging Face<br>
-                <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400">
-                    como sistema local
-                </span>
-            </h1>
-            
-            <p class="text-xl md:text-2xl text-gray-400 mb-10 max-w-3xl mx-auto leading-relaxed">
-                Acceso instantáneo a modelos y datasets sin descargar. 
-                Lazy loading, caché inteligente, y API simple basada en archivos.
+        <div class="card">
+            <h2>¿Qué es hf-mount?</h2>
+            <p>
+                <strong>hf-mount</strong> monta repositorios de HuggingFace como sistemas de archivos locales. 
+                Los archivos se leen <strong>bajo demanda</strong> — no se descarga todo el modelo, solo lo que necesitas.
             </p>
-            
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a href="#instalacion" class="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 transition-all transform hover:scale-105">
-                    Comenzar →
-                </a>
-                <a href="https://github.com/huggingface/hf-mount" target="_blank" class="px-8 py-4 bg-white/10 text-white font-semibold rounded-xl border border-white/20 hover:bg-white/20 transition-all">
-                    Ver en GitHub
-                </a>
-            </div>
-            
-            <!-- Code Preview -->
-            <div class="mt-16 text-left mx-auto max-w-2xl">
-                <div class="bg-dark-800/80 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
-                    <div class="flex items-center gap-2 px-4 py-3 border-b border-white/10">
-                        <div class="w-3 h-3 bg-red-500 rounded-full"></div>
-                        <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                        <span class="ml-2 text-gray-500 text-sm font-mono">terminal</span>
-                    </div>
-                    <div class="p-6">
-                        <pre class="font-mono text-sm"><code><span class="text-purple-400">$</span> <span class="text-cyan-400">hf-mount</span> start repo openai/gpt-oss-20b /tmp/model
-
-<span class="text-gray-500"># Acceso instantáneo - sin descargar</span>
-<span class="text-purple-400">$</span> ls /tmp/model
-config.json  <span class="text-gray-500">model.safetensors  tokenizer.json</span>
-
-<span class="text-purple-400">$</span> <span class="text-cyan-400">python</span> -c "
-> from transformers import AutoModel
-> model = AutoModel.from_pretrained('/tmp/model')
-> # Los archivos se cargan bajo demanda"</code></pre>
-                    </div>
-                </div>
-            </div>
         </div>
         
-        <!-- Scroll Indicator -->
-        <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-            <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
-            </svg>
-        </div>
-    </section>
-
-    <!-- Features Section -->
-    <section id="caracteristicas" class="py-24 px-6">
-        <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl font-bold text-white mb-4">¿Por qué hf-mount?</h2>
-                <p class="text-xl text-gray-400 max-w-2xl mx-auto">
-                    La forma más inteligente de acceder a modelos y datasets de Hugging Face
-                </p>
-            </div>
+        <div class="card">
+            <h2>🚀 Guía de Inicio Rápido</h2>
             
-            <div class="grid md:grid-cols-3 gap-8">
-                <!-- Feature 1 -->
-                <div class="group p-8 bg-white/5 rounded-2xl border border-white/10 hover:border-amber-500/50 transition-all duration-300">
-                    <div class="w-14 h-14 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">Sin descarga completa</h3>
-                    <p class="text-gray-400">
-                        Acceso inmediato a terabytes de datos. Solo se descargan los bytes que tu código realmente toca.
-                    </p>
-                </div>
-                
-                <!-- Feature 2 -->
-                <div class="group p-8 bg-white/5 rounded-2xl border border-white/10 hover:border-amber-500/50 transition-all duration-300">
-                    <div class="w-14 h-14 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">API simple basada en archivos</h3>
-                    <p class="text-gray-400">
-                        Usa herramientas UNIX (ls, cat, find, grep). No necesitas SDKs complejos. Funciona con tu código existente.
-                    </p>
-                </div>
-                
-                <!-- Feature 3 -->
-                <div class="group p-8 bg-white/5 rounded-2xl border border-white/10 hover:border-amber-500/50 transition-all duration-300">
-                    <div class="w-14 h-14 bg-gradient-to-br from-green-400 to-emerald-500 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-xl font-semibold text-white mb-3">Caché inteligente</h3>
-                    <p class="text-gray-400">
-                        Caché local automático de hasta 10GB. Los archivos frecuentemente accedidos se guardan localmente.
-                    </p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Installation Section -->
-    <section id="instalacion" class="py-24 px-6 bg-white/5">
-        <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl font-bold text-white mb-4">Instalación</h2>
-                <p class="text-xl text-gray-400">En segundos, sin complicaciones</p>
-            </div>
-            
-            <div class="grid md:grid-cols-2 gap-12 items-center">
-                <div>
-                    <div class="bg-dark-800/80 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden">
-                        <div class="flex items-center gap-2 px-4 py-3 border-b border-white/10">
-                            <div class="w-3 h-3 bg-red-500 rounded-full"></div>
-                            <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-                            <span class="ml-2 text-gray-500 text-sm font-mono">bash</span>
-                        </div>
-                        <div class="p-6">
-                            <pre class="font-mono text-sm text-gray-300"><code><span class="text-green-400"># Instalación rápida</span>
-curl -fsSL https://raw.githubusercontent.com/\
-huggingface/hf-mount/main/install.sh | sh
-
-<span class="text-green-400"># Verificar instalación</span>
-hf-mount --version
-
-<span class="text-green-400"># Montar un modelo público</span>
-hf-mount start repo openai/gpt-oss-20b /tmp/model</code></pre>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="space-y-6">
-                    <div class="flex items-start gap-4">
-                        <div class="w-8 h-8 bg-amber-500/20 text-amber-400 rounded-lg flex items-center justify-center flex-shrink-0 font-bold">1</div>
-                        <div>
-                            <h4 class="text-white font-semibold mb-1">Ejecuta el script de instalación</h4>
-                            <p class="text-gray-400 text-sm">Instala hf-mount en ~/.local/bin/</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-start gap-4">
-                        <div class="w-8 h-8 bg-amber-500/20 text-amber-400 rounded-lg flex items-center justify-center flex-shrink-0 font-bold">2</div>
-                        <div>
-                            <h4 class="text-white font-semibold mb-1">Configura tu token (opcional)</h4>
-                            <p class="text-gray-400 text-sm">Exporta HF_TOKEN para repos privados</p>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-start gap-4">
-                        <div class="w-8 h-8 bg-amber-500/20 text-amber-400 rounded-lg flex items-center justify-center flex-shrink-0 font-bold">3</div>
-                        <div>
-                            <h4 class="text-white font-semibold mb-1">¡Listo!</h4>
-                            <p class="text-gray-400 text-sm">Monta cualquier modelo o dataset</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Examples Section -->
-    <section id="ejemplos" class="py-24 px-6">
-        <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl font-bold text-white mb-4">Ejemplos</h2>
-                <p class="text-xl text-gray-400">Todo lo que puedes hacer con hf-mount</p>
-            </div>
-            
-            <div class="space-y-8">
-                <!-- Example 1 -->
-                <div class="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-white">Cargar modelos sin descargar</h3>
-                        <span class="px-3 py-1 bg-green-500/20 text-green-400 text-sm rounded-full">Python</span>
-                    </div>
-                    <div class="p-6">
-                        <pre class="font-mono text-sm text-gray-300 overflow-x-auto"><code><span class="text-purple-400">from</span> transformers <span class="text-purple-400">import</span> AutoModelForCausalLM
-
-<span class="text-gray-500"># ¡Sin descargar! Lee bajo demanda</span>
-model = AutoModelForCausalLM.from_pretrained(<span class="text-green-400">"/tmp/gpt-oss"</span>)
-
-<span class="text-gray-500"># Tambien funciona con datasets</span>
-<span class="text-purple-400">from</span> datasets <span class="text-purple-400">import</span> load_dataset
-dataset = load_dataset(<span class="text-green-400">"/tmp/hacker-news"</span>, split=<span class="text-green-400">"train"</span>)</code></pre>
-                    </div>
-                </div>
-                
-                <!-- Example 2 -->
-                <div class="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-white">Explorar repositorios</h3>
-                        <span class="px-3 py-1 bg-blue-500/20 text-blue-400 text-sm rounded-full">Bash</span>
-                    </div>
-                    <div class="p-6">
-                        <pre class="font-mono text-sm text-gray-300 overflow-x-auto"><code><span class="text-gray-500"># Ver estructura</span>
-ls /tmp/gpt2
-
-<span class="text-gray-500"># Leer archivos</span>
-cat /tmp/gpt2/config.json
-
-<span class="text-gray-500"># Buscar archivos</span>
-find /tmp/gpt2 -name <span class="text-green-400">"*.safetensors"</span> | head -5
-
-<span class="text-gray-500"># Buscar contenido</span>
-grep -r <span class="text-green-400">"vocab_size"</span> /tmp/gpt2/</code></pre>
-                    </div>
-                </div>
-                
-                <!-- Example 3 -->
-                <div class="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-white">Montar buckets privados</h3>
-                        <span class="px-3 py-1 bg-purple-500/20 text-purple-400 text-sm rounded-full">Bucket</span>
-                    </div>
-                    <div class="p-6">
-                        <pre class="font-mono text-sm text-gray-300 overflow-x-auto"><code><span class="text-gray-500"># Bucket privado con token</span>
-hf-mount start --hf-token $HF_TOKEN <span class="text-cyan-400">bucket</span> \
-    myuser/my-bucket /tmp/data
-
-<span class="text-gray-500"># Solo lectura</span>
-hf-mount start --hf-token $HF_TOKEN --<span class="text-cyan-400">read-only</span> \
-    bucket myuser/my-bucket /tmp/data
-
-<span class="text-gray-500"># Subfolder específico</span>
-hf-mount start --hf-token $HF_TOKEN <span class="text-cyan-400">bucket</span> \
-    myuser/my-bucket/checkpoints /tmp/ckpts</code></pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Use Cases Section -->
-    <section id="casos" class="py-24 px-6 bg-white/5">
-        <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl font-bold text-white mb-4">Casos de uso</h2>
-                <p class="text-xl text-gray-400">¿Cuándo usar hf-mount?</p>
-            </div>
-            
-            <div class="grid md:grid-cols-2 gap-8">
-                <!-- Yes -->
-                <div class="p-8 bg-green-500/10 rounded-2xl border border-green-500/30">
-                    <h3 class="text-xl font-semibold text-green-400 mb-6 flex items-center gap-2">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                        Perfecto para
-                    </h3>
-                    <ul class="space-y-4">
-                        <li class="flex items-start gap-3">
-                            <span class="text-green-400">✓</span>
-                            <span class="text-gray-300">Cargar modelos/datasets sin descargar el repo completo</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-green-400">✓</span>
-                            <span class="text-gray-300">Explorar contenido con herramientas UNIX</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-green-400">✓</span>
-                            <span class="text-gray-300">Workloads de lectura intensiva (training, inference)</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-green-400">✓</span>
-                            <span class="text-gray-300">Entornos con espacio en disco limitado</span>
-                        </li>
-                    </ul>
-                </div>
-                
-                <!-- No -->
-                <div class="p-8 bg-red-500/10 rounded-2xl border border-red-500/30">
-                    <h3 class="text-xl font-semibold text-red-400 mb-6 flex items-center gap-2">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                        No recomendado para
-                    </h3>
-                    <ul class="space-y-4">
-                        <li class="flex items-start gap-3">
-                            <span class="text-red-400">✗</span>
-                            <span class="text-gray-300">Filesystem de propósito general (no multi-writer)</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-red-400">✗</span>
-                            <span class="text-gray-300">I/O aleatorio sensible a latencia</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-red-400">✗</span>
-                            <span class="text-gray-300">Workloads que necesitan consistencia fuerte</span>
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="text-red-400">✗</span>
-                            <span class="text-gray-300">Edición con editores de texto (usa --advanced-writes)</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CSI Driver Section -->
-    <section class="py-24 px-6">
-        <div class="max-w-7xl mx-auto">
-            <div class="bg-gradient-to-br from-purple-900/50 to-indigo-900/50 rounded-3xl p-12 border border-purple-500/30">
-                <div class="grid md:grid-cols-2 gap-12 items-center">
-                    <div>
-                        <span class="inline-block px-4 py-1 bg-purple-500/30 text-purple-300 text-sm rounded-full mb-4">
-                            ☸️ Kubernetes
-                        </span>
-                        <h2 class="text-4xl font-bold text-white mb-4">hf-csi-driver</h2>
-                        <p class="text-lg text-gray-300 mb-6">
-                            ¿Necesitas hf-mount en Kubernetes? El CSI driver te permite 
-                            montar repos y buckets como volúmenes en tus pods.
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h3>Instala hf-mount</h3>
+                        <p>
+                            <code>curl -fsSL https://raw.githubusercontent.com/huggingface/hf-mount/main/install.sh | sh</code>
                         </p>
-                        <a href="https://github.com/huggingface/hf-csi-driver" target="_blank" class="inline-flex items-center gap-2 px-6 py-3 bg-purple-500 text-white font-semibold rounded-xl hover:bg-purple-600 transition-all">
-                            Ver documentación
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                            </svg>
-                        </a>
-                    </div>
-                    
-                    <div>
-                        <pre class="font-mono text-sm text-gray-300 bg-dark-900/80 p-6 rounded-xl overflow-x-auto"><code><span class="text-purple-400"># Instalación con Helm</span>
-helm install hf-csi oci://ghcr.io/\
-huggingface/charts/hf-csi-driver
-
-<span class="text-gray-500"># Usage en Pod</span>
-volumes:
-- name: model
-  csi:
-    driver: hf.csi.huggingface.co
-    volumeAttributes:
-      sourceType: repo
-      sourceId: openai/gpt2</code></pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="py-12 px-6 border-t border-white/10 bg-dark-900/80">
-        <div class="max-w-7xl mx-auto">
-            <div class="grid md:grid-cols-2 gap-12">
-                <!-- Contact Info -->
-                <div>
-                    <h3 class="text-xl font-bold text-white mb-6">¿Qué sigue?</h3>
-                    <p class="text-gray-400 mb-6">
-                        Estoy siempre abierto a nuevas oportunidades y colaboraciones. 
-                        Ya sea que tengas una pregunta o simplemente quieras saludar, 
-                        ¡haré todo lo posible por responderte!
-                    </p>
-                    
-                    <div class="space-y-4">
-                        <div class="flex items-center gap-3 text-gray-400">
-                            <i class="fas fa-map-marker-alt text-amber-400 w-5"></i>
-                            <span>San José, Costa Rica</span>
-                        </div>
-                        <div class="flex items-center gap-3 text-gray-400">
-                            <i class="fas fa-envelope text-amber-400 w-5"></i>
-                            <a href="mailto:jeremylive@live.com" class="hover:text-white transition-colors">jeremylive@live.com</a>
-                        </div>
-                        <div class="flex items-center gap-3 text-gray-400">
-                            <i class="fas fa-phone text-amber-400 w-5"></i>
-                            <span>+506 8395 3467</span>
-                        </div>
-                        <div class="flex items-center gap-3 text-gray-400">
-                            <i class="fas fa-language text-amber-400 w-5"></i>
-                            <span>Español (Nativo) | Inglés (C1/Fluido)</span>
-                        </div>
                     </div>
                 </div>
                 
-                <!-- Social Links -->
-                <div>
-                    <h3 class="text-xl font-bold text-white mb-6">Conectemos</h3>
-                    <div class="flex flex-wrap gap-4">
-                        <a href="mailto:jeremylive@live.com" class="w-12 h-12 bg-white/5 hover:bg-amber-500/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-400 transition-all">
-                            <i class="fas fa-envelope text-xl"></i>
-                        </a>
-                        <a href="https://www.linkedin.com/in/jeremy-live/" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-blue-600/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all">
-                            <i class="fab fa-linkedin text-xl"></i>
-                        </a>
-                        <a href="https://github.com/developerjeremylive" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-white/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition-all">
-                            <i class="fab fa-github text-xl"></i>
-                        </a>
-                        <a href="https://discord.com/invite/4Cm5yMrq2t" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-indigo-600/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-indigo-500 transition-all">
-                            <i class="fab fa-discord text-xl"></i>
-                        </a>
-                        <a href="https://t.me/computines_developerjeremylive" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-sky-500/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-sky-400 transition-all">
-                            <i class="fab fa-telegram text-xl"></i>
-                        </a>
-                        <a href="https://gitlab.com/jeremylive" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-orange-500/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-orange-400 transition-all">
-                            <i class="fab fa-gitlab text-xl"></i>
-                        </a>
-                        <a href="https://www.facebook.com/j3r3myliv3/" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-blue-600/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-blue-500 transition-all">
-                            <i class="fab fa-facebook text-xl"></i>
-                        </a>
-                        <a href="http://wa.link/9irgog" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-green-500/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-green-400 transition-all">
-                            <i class="fab fa-whatsapp text-xl"></i>
-                        </a>
-                        <a href="https://beacons.ai/jeremylive" target="_blank" class="w-12 h-12 bg-white/5 hover:bg-pink-500/20 rounded-lg flex items-center justify-center text-gray-400 hover:text-pink-400 transition-all">
-                            <i class="fas fa-link text-xl"></i>
-                        </a>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h3>Monte un modelo</h3>
+                        <p>
+                            <code>hf-mount start repo openai-community/gpt2 /tmp/gpt2</code>
+                        </p>
+                        <p style="margin-top:8px;color:#888;">(Para modelos privados, agrega <code>--hf-token $HF_TOKEN</code>)</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h3>Usa con Python/Transformers</h3>
+                        <pre><code>from transformers import AutoModelForCausalLM
+
+# Carga desde el path montado - NO descarga nada
+model = AutoModelForCausalLM.from_pretrained("/tmp/gpt2")</code></pre>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h3>Ejecuta el servidor API</h3>
+                        <pre><code>pip install flask transformers torch
+python api_server.py</code></pre>
+                        <p>Luego abre <strong>http://localhost:5000</strong></p>
                     </div>
                 </div>
             </div>
-            
-            <div class="mt-12 pt-8 border-t border-white/10 text-center">
-                <p class="text-gray-500 text-sm">
-                    <span class="text-amber-400">♥</span> Diseñado & Desarrollado por <span class="text-white font-semibold">Jeremy José Live González</span>
-                </p>
-                <p class="text-gray-600 text-xs mt-2">
-                    Construido con HTML, Tailwind CSS & Three.js
-                </p>
-            </div>
         </div>
-    </footer>
-
-    <!-- Voice Agent UI -->
-    <!-- Overlay -->
-    <div id="voice-agent-overlay" class="fixed inset-0 z-[55] hidden transition-opacity duration-300"></div>
-    
-    <!-- Floating Button - Voice Agent -->
-    <button id="voice-agent-btn" class="fixed bottom-6 right-6 z-50 bg-gradient-to-r from-amber-500 to-orange-500 text-black w-14 h-14 rounded-full shadow-lg shadow-amber-500/30 flex items-center justify-center hover:scale-110 transition-transform duration-300 group">
-        <i class="fas fa-microphone text-lg"></i>
-        <div class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping-slow hidden" id="voice-listening-indicator"></div>
-    </button>
-    
-    <!-- Floating Button - Playground -->
-    <button id="playground-btn" class="fixed bottom-6 right-24 z-50 bg-gradient-to-r from-purple-500 to-indigo-500 text-white w-14 h-14 rounded-full shadow-lg shadow-purple-500/30 flex items-center justify-center hover:scale-110 transition-transform duration-300 group">
-        <i class="fas fa-robot text-lg"></i>
-    </button>
-
-    <!-- Voice Agent Panel -->
-    <div id="voice-agent-panel" class="fixed inset-y-0 right-0 w-full sm:w-[420px] bg-[#0f0f12] transform translate-x-full transition-transform duration-300 z-[60] shadow-2xl flex flex-col overflow-hidden border-l border-[#3a3a42]">
-        <!-- Header -->
-        <div class="panel-header px-4 py-3 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <i class="fas fa-robot text-amber-400 text-xl"></i>
-                <div>
-                    <h3 class="text-white font-semibold text-sm">AI Assistant</h3>
-                    <p class="text-amber-400 text-[10px] font-mono truncate" id="model-status">Model: gemini-3-flash-preview (Thinking)</p>
+        
+        <div class="card">
+            <h2>📦 Modelos Recomendados</h2>
+            <div class="model-list">
+                <div class="model-item">
+                    <div class="name">gpt2</div>
+                    <div class="size">~500 MB</div>
+                </div>
+                <div class="model-item">
+                    <div class="name">TinyLlama</div>
+                    <div class="size">~1 GB</div>
+                </div>
+                <div class="model-item">
+                    <div class="name">Qwen2.5-0.5B</div>
+                    <div class="size">~4 GB</div>
+                </div>
+                <div class="model-item">
+                    <div class="name">Llama-3.2-1B</div>
+                    <div class="size">~4 GB</div>
                 </div>
             </div>
-            <div class="flex items-center gap-1">
-                <button id="voice-settings-btn" class="text-gray-400 hover:text-amber-400 p-2 transition-colors" title="Configuración">
-                    <i class="fas fa-cog text-sm"></i>
-                </button>
-                <button id="voice-close-btn" class="text-gray-400 hover:text-red-400 p-2 transition-colors" title="Cerrar">
-                    <i class="fas fa-times text-sm"></i>
-                </button>
-            </div>
         </div>
         
-        <!-- Language & Voice Info -->
-        <div class="px-4 py-2 bg-[#1a1a1f] border-b border-[#3a3a42] flex justify-between items-center">
-            <span class="text-[10px] text-gray-500 font-mono" id="current-lang">ES</span>
-            <span class="text-[10px] text-amber-400 font-mono truncate" id="current-voice-name">Google Español</span>
+        <div class="warning">
+            <strong>Nota:</strong> Esta página es una guía. Para usar el chat, necesitas:
+            <ol style="margin:10px 0 0 20px;">
+                <li>hf-mount instalado en tu máquina</li>
+                <li>Un modelo montado en /tmp</li>
+                <li>El servidor API corriendo localmente</li>
+            </ol>
         </div>
         
-        <!-- Settings Modal -->
-        <div id="voice-settings-modal" class="absolute inset-x-0 top-[73px] bottom-0 bg-[#0f0f12] z-30 p-6 hidden flex-col border-t border-[#3a3a42] animate-fade-in overflow-y-auto">
-            <div class="flex justify-between items-center mb-6">
-                <h4 class="text-white font-semibold">Configuración</h4>
-                <button id="close-settings-btn" class="text-gray-400 hover:text-red-400">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            
-            <div class="mb-4">
-                <label class="settings-label">Gemini API Key</label>
-                <input type="password" id="api-key-input" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="sk-...">
-            </div>
-            
-            <div class="mb-4">
-                <label class="settings-label">Modelo</label>
-                <div class="flex gap-2">
-                    <select id="model-select" class="dark-select flex-1 rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
-                        <option value="custom">Custom Model ID</option>
-                    </select>
-                    <button id="refresh-models-btn" class="px-4 py-3 bg-[#232329] text-amber-400 rounded-lg hover:bg-[#2a2a32] transition-colors border border-[#3a3a42]">
-                        <i class="fas fa-sync-alt text-sm"></i>
-                    </button>
-                </div>
-            </div>
-            
-            <div class="mb-4 hidden" id="custom-model-container">
-                <label class="settings-label">Custom Model ID</label>
-                <input type="text" id="custom-model-input" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="gemini-3-flash-preview">
-            </div>
-            
-            <div class="space-y-4 mb-6">
-                <label class="flex items-center justify-between">
-                    <span class="text-gray-400 text-sm">Thinking Mode</span>
-                    <input type="checkbox" id="thinking-mode-toggle" class="toggle-input" checked>
-                </label>
-                <label class="flex items-center justify-between">
-                    <span class="text-gray-400 text-sm">Text-to-Speech (TTS)</span>
-                    <input type="checkbox" id="tts-toggle" class="toggle-input" checked>
-                </label>
-            </div>
-            
-            <div class="mb-4">
-                <label class="settings-label">Idioma de voz</label>
-                <select id="voice-lang-select" class="dark-select w-full rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
-                </select>
-            </div>
-            
-            <div class="mb-6">
-                <label class="settings-label">Voz</label>
-                <select id="voice-select" class="dark-select w-full rounded-lg px-4 py-3 text-sm appearance-none cursor-pointer">
-                    <option value="">Voz automática</option>
-                </select>
-            </div>
-            
-            <button id="clear-history-btn" class="w-full py-3 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors text-sm border border-red-500/30">
-                <i class="fas fa-trash-alt mr-2"></i>Borrar historial
-            </button>
+        <div class="card">
+            <h2>📁 Archivos del Proyecto</h2>
+            <ul style="line-height:2;">
+                <li><code>README.md</code> - Guía completa</li>
+                <li><code>api_server.py</code> - Servidor API con chat UI</li>
+                <li><code>setup.sh</code> - Script automático de setup</li>
+                <li><code>worker.js</code> - Proxy para Cloudflare (alternativo)</li>
+            </ul>
         </div>
         
-        <!-- Chat Messages -->
-        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0f0f12]"></div>
-        
-        <!-- Player Controls -->
-        <div id="audio-player-controls" class="hidden px-4 py-3 border-t border-[#3a3a42] bg-[#232329] flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <button id="player-play-pause-btn" class="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center text-black hover:bg-amber-400 transition-colors">
-                    <i class="fas fa-pause text-xs"></i>
-                </button>
-                <button id="player-stop-btn" class="text-gray-400 hover:text-red-400">
-                    <i class="fas fa-stop text-sm"></i>
-                </button>
-            </div>
-            <div class="flex-1 mx-3">
-                <p id="player-status" class="text-xs text-gray-400 truncate">Reproduciendo...</p>
-            </div>
-        </div>
-        
-        <!-- Input Area -->
-        <div class="input-area p-4">
-            <div class="flex items-end gap-2">
-                <button id="mic-btn" class="w-10 h-10 bg-[#232329] rounded-full flex items-center justify-center text-gray-400 hover:text-amber-400 hover:bg-[#2a2a32] transition-all border border-[#3a3a42] flex-shrink-0">
-                    <i class="fas fa-microphone text-sm"></i>
-                </button>
-                <textarea id="chat-input" class="flex-1 rounded-xl px-4 py-3 text-sm resize-none" rows="1" placeholder="Escribe tu mensaje..."></textarea>
-                <button id="send-btn" class="w-10 h-10 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full flex items-center justify-center text-black hover:shadow-lg hover:shadow-amber-500/20 transition-all flex-shrink-0">
-                    <i class="fas fa-paper-plane text-sm"></i>
-                </button>
-            </div>
+        <div class="footer">
+            <p>
+                🤗 <a href="https://github.com/huggingface/hf-mount">hf-mount</a> | 
+                📂 <a href="https://github.com/developerjeremylive/hf-mount-guide">Repository</a>
+            </p>
+            <p style="margin-top:10px;color:#555;">
+                Jeremy Live | San José, Costa Rica
+            </p>
         </div>
     </div>
-
-    <!-- Playground Panel - Full Screen Modal -->
-    <div id="playground-overlay" class="fixed inset-0 z-[55] hidden transition-opacity duration-300 bg-black/90 backdrop-blur-md"></div>
-    
-    <div id="playground-panel" class="fixed inset-0 w-full h-full bg-[#0f0f12] transform translate-y-full transition-transform duration-300 z-[60] flex flex-col">
-        <!-- Header -->
-        <div class="panel-header px-6 py-4 flex items-center justify-between flex-shrink-0 border-b border-[#3a3a42]">
-            <div class="flex items-center gap-4">
-                <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-robot text-white text-xl"></i>
-                </div>
-                <div>
-                    <h3 class="text-white font-bold text-lg">hf-mount Playground</h3>
-                    <p class="text-purple-400 text-xs font-mono" id="playground-model-status">Selecciona un modelo</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                <button id="playground-settings-btn" class="px-4 py-2 bg-[#232329] text-gray-400 hover:text-purple-400 rounded-lg transition-colors border border-[#3a3a42]" title="Configuración">
-                    <i class="fas fa-cog"></i>
-                </button>
-                <button id="playground-close-btn" class="w-10 h-10 bg-[#232329] text-gray-400 hover:text-red-400 rounded-lg transition-colors flex items-center justify-center border border-[#3a3a42]" title="Cerrar">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Settings Panel -->
-        <div id="playground-settings-modal" class="absolute inset-0 top-[76px] bg-[#0f0f12] z-30 p-6 hidden flex-row gap-6 border-t border-[#3a3a42] animate-fade-in">
-            <!-- Left: Config -->
-            <div class="w-1/3 flex flex-col">
-                <div class="flex justify-between items-center mb-4">
-                    <h4 class="text-white font-semibold">Configuración</h4>
-                    <button id="close-playground-settings-btn" class="text-gray-400 hover:text-red-400">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="settings-label">Hugging Face API Key</label>
-                    <input type="password" id="hf-api-key" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="hf_...">
-                </div>
-                
-                <div class="mb-4">
-                    <label class="settings-label">Buscar modelo</label>
-                    <input type="text" id="model-search" class="dark-input w-full rounded-lg px-4 py-3 text-sm" placeholder="gpt2, llama, mistral...">
-                </div>
-                
-                <div class="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label class="settings-label">Temperature</label>
-                    <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" class="w-full accent-purple-500">
-                    <span class="text-xs text-gray-500" id="temperature-val">0.7</span>
-                </div>
-                <div>
-                    <label class="settings-label">Max Tokens</label>
-                    <input type="number" id="max-tokens" class="dark-input w-full rounded-lg px-3 py-2 text-sm" value="512" min="1" max="4096">
-                </div>
-            </div>
-            
-            <button id="load-models-btn" class="w-full py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-semibold">
-                <i class="fas fa-sync-alt mr-2"></i>Actualizar Modelos
-            </button>
-            </div>
-            
-            <!-- Right: Model List -->
-            <div class="flex-1 flex flex-col">
-                <label class="settings-label mb-2">Modelos de Generación de Texto</label>
-                <div id="model-list" class="flex-1 overflow-y-auto border border-[#3a3a42] rounded-lg p-3 space-y-2">
-                    <div class="text-gray-500 text-sm p-2">Cargando modelos...</div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Chat Area -->
-        <div id="playground-chat" class="flex-1 overflow-y-auto p-6 space-y-4 bg-[#0f0f12]">
-            <div class="flex flex-col items-center justify-center h-full opacity-50">
-                <i class="fas fa-robot text-6xl text-gray-700 mb-6"></i>
-                <p class="text-gray-400 text-lg">Selecciona un modelo y comienza a chatear</p>
-                <p class="text-gray-600 text-sm mt-3">Los modelos se cargan sin descargar usando hf-mount</p>
-            </div>
-        </div>
-        
-        <!-- Input Area -->
-        <div class="input-area p-6 flex-shrink-0 bg-[#1a1a1f] border-t border-[#3a3a42]">
-            <div class="flex items-end gap-4 max-w-4xl mx-auto">
-                <button id="mic-btn" class="w-12 h-12 bg-[#232329] rounded-full flex items-center justify-center text-gray-400 hover:text-purple-400 hover:bg-[#2a2a32] transition-all border border-[#3a3a42] flex-shrink-0">
-                    <i class="fas fa-microphone text-lg"></i>
-                </button>
-                <textarea id="playground-chat-input" class="flex-1 rounded-2xl px-6 py-4 text-base resize-none bg-[#232329] border border-[#3a3a42] text-white placeholder-gray-500 focus:border-purple-500 outline-none" rows="1" placeholder="Escribe tu mensaje..."></textarea>
-                <button id="playground-send-btn" class="w-12 h-12 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full flex items-center justify-center text-white hover:shadow-lg hover:shadow-purple-500/30 transition-all flex-shrink-0">
-                    <i class="fas fa-paper-plane text-lg"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Confirm Modal -->
-    <div id="confirm-modal" class="hidden fixed inset-0 bg-black/70 z-[70] items-center justify-center backdrop-blur-sm">
-        <div class="bg-[#1a1a1f] border border-[#3a3a42] rounded-xl p-6 max-w-sm mx-4">
-            <p id="confirm-message" class="text-white mb-4"></p>
-            <div class="flex gap-3 justify-end">
-                <button id="confirm-cancel-btn" class="px-4 py-2 text-gray-400 hover:text-white transition-colors">Cancelar</button>
-                <button id="confirm-ok-btn" class="px-4 py-2 bg-amber-500 text-black rounded-lg hover:bg-amber-400 transition-colors">Confirmar</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Toast Notification -->
-    <div id="notification-toast" class="fixed bottom-24 right-6 z-[80] hidden transition-all duration-300 translate-x-10 opacity-0">
-        <div class="toast-notification px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3">
-            <i id="notification-icon" class="fas fa-info-circle text-amber-400"></i>
-            <span id="notification-message" class="text-sm"></span>
-        </div>
-    </div>
-
-    <script src="js/main.js"></script>
-    <script src="js/voice-agent.js"></script>
-    <script src="js/playground.js"></script>
 </body>
 </html>
